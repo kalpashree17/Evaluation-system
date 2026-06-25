@@ -1,6 +1,6 @@
 import { Icon } from "./icon";
 import { icons } from "./icons";
-import Overview from "../dashboard/Overview";
+import Overview from "../dashboard/overview";
 import Subjects from "../dashboard/Subjects";
 import QuestionBank from "../dashboard/questionBank";
 import Interviews from "../dashboard/interviews";
