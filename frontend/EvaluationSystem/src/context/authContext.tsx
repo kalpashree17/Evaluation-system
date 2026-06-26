@@ -4,18 +4,27 @@ import type { User, AuthState } from '../types/index';
 // ── Types ────────────────────────────────────────────────────────────────────
 
 export type UserRole = "admin" | "interviewer" | "candidate";
+
 interface RegisterData {
   name: string;
   email: string;
   password: string;
-  role?:"admin" | "interviewer" | "candidate" ;
+  role?: UserRole;
+}
+
+interface LoginResponse {
+  user: User;
+  token: string;
 }
 
 interface AuthContextType extends AuthState {
-  login: (email: string, password: string) => Promise<void>;
-  register: (data: RegisterData) => Promise<void>;
+  login: (email: string, password: string) => Promise<LoginResponse>;
+  register: (data: RegisterData) => Promise<LoginResponse>;
   logout: () => void;
-  hasRole: (role: string | string[]) => boolean;
+  hasRole: (role: UserRole | UserRole[]) => boolean;
+  isAdmin: () => boolean;
+  isInterviewer: () => boolean;
+  isCandidate: () => boolean;
 }
 
 // ── Mock data ────────────────────────────────────────────────────────────────
@@ -25,7 +34,8 @@ interface MockUser {
   name: string;
   email: string;
   password: string;
-  role: string;
+  role: UserRole;
+  createdAt?: string;
 }
 
 const MOCK_USERS: MockUser[] = [
@@ -35,6 +45,7 @@ const MOCK_USERS: MockUser[] = [
     email: 'admin@interviewiq.com',
     password: 'admin123',
     role: 'admin',
+    createdAt: new Date().toISOString(),
   },
   {
     id: '2',
@@ -42,6 +53,7 @@ const MOCK_USERS: MockUser[] = [
     email: 'candidate@interviewiq.com',
     password: 'candidate123',
     role: 'candidate',
+    createdAt: new Date().toISOString(),
   },
   {
     id: '3',
@@ -49,6 +61,7 @@ const MOCK_USERS: MockUser[] = [
     email: 'interviewer@interviewiq.com',
     password: 'interviewer123',
     role: 'interviewer',
+    createdAt: new Date().toISOString(),
   },
 ];
 
@@ -97,8 +110,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   // ── login ──────────────────────────────────────────────────────────────────
 
-  const login = (email: string, password: string): Promise<void> => {
-    return new Promise<void>((resolve, reject) => {
+  const login = (email: string, password: string): Promise<LoginResponse> => {
+    return new Promise<LoginResponse>((resolve, reject) => {
+      // Simulate API call
       setTimeout(() => {
         const match = MOCK_USERS.find(
           (u) => u.email === email && u.password === password
@@ -113,22 +127,27 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         const { password: _pw, ...userWithoutPassword } = match;
         const token = generateToken();
 
+        const userData = userWithoutPassword as User;
+        
         setState({
-          user: userWithoutPassword as User,
+          user: userData,
           token,
           isAuthenticated: true,
           isLoading: false,
         });
 
-        resolve();
+        resolve({
+          user: userData,
+          token,
+        });
       }, 500);
     });
   };
 
   // ── register ───────────────────────────────────────────────────────────────
 
-  const register = (data: RegisterData): Promise<void> => {
-    return new Promise<void>((resolve, reject) => {
+  const register = (data: RegisterData): Promise<LoginResponse> => {
+    return new Promise<LoginResponse>((resolve, reject) => {
       setTimeout(() => {
         const exists = MOCK_USERS.some((u) => u.email === data.email);
 
@@ -137,17 +156,28 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           return;
         }
 
+        // In a real app, the role would be assigned by the server
+        // For demo, we'll use the provided role or default to 'candidate'
+        const role = data.role || 'candidate';
+        
         const newUser: User = {
           id: String(MOCK_USERS.length + 1),
           name: data.name,
           email: data.email,
-          role: data.role ?? 'candidate',
+          role: role,
           createdAt: new Date().toISOString(),
         };
 
-        // NOTE: In a real app this would hit an API. Here the new user is only
-        // persisted in localStorage for the current session; refreshing will
-        // clear MOCK_USERS so the user must be stored server-side instead.
+        // Add to mock users (in real app, this would be stored in DB)
+        MOCK_USERS.push({
+          id: newUser.id,
+          name: newUser.name,
+          email: newUser.email,
+          password: data.password,
+          role: newUser.role,
+          createdAt: newUser.createdAt,
+        });
+
         const token = generateToken();
 
         setState({
@@ -157,7 +187,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           isLoading: false,
         });
 
-        resolve();
+        resolve({
+          user: newUser,
+          token,
+        });
       }, 500);
     });
   };
@@ -175,18 +208,41 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     });
   };
 
-  // ── hasRole ────────────────────────────────────────────────────────────────
+  // ── Role checking functions ──────────────────────────────────────────────
 
-  const hasRole = (roles: string | string[]): boolean => {
+  const hasRole = (roles: UserRole | UserRole[]): boolean => {
     if (!state.user) return false;
     const roleArray = Array.isArray(roles) ? roles : [roles];
     return roleArray.includes(state.user.role);
   };
 
+  const isAdmin = (): boolean => {
+    return state.user?.role === 'admin';
+  };
+
+  const isInterviewer = (): boolean => {
+    return state.user?.role === 'interviewer';
+  };
+
+  const isCandidate = (): boolean => {
+    return state.user?.role === 'candidate';
+  };
+
   // ── render ─────────────────────────────────────────────────────────────────
 
   return (
-    <AuthContext.Provider value={{ ...state, login, register, logout, hasRole }} >
+    <AuthContext.Provider 
+      value={{ 
+        ...state, 
+        login, 
+        register, 
+        logout, 
+        hasRole,
+        isAdmin,
+        isInterviewer,
+        isCandidate
+      }} 
+    >
       {children}
     </AuthContext.Provider>
   );

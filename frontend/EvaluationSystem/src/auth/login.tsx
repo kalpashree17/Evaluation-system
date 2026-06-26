@@ -16,9 +16,23 @@ const Login: React.FC = () => {
     setLoading(true);
 
     try {
-      await login(email, password);
-      // Role-based redirect will be handled in App.tsx
-      navigate('/'); // Will redirect based on role
+      const response = await login(email, password);
+      const { user } = response;
+      
+      // Role-based redirect after successful login
+      switch (user.role) {
+        case 'admin':
+          navigate('/admin/dashboard');
+          break;
+        case 'interviewer':
+          navigate('/interviewer/dashboard');
+          break;
+        case 'candidate':
+          navigate('/candidate/dashboard');
+          break;
+        default:
+          navigate('/dashboard');
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed');
     } finally {
@@ -28,10 +42,10 @@ const Login: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-[#0a0f1c] flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
+      <div className="w-full max-w-120">
         <div className="bg-[#141928] border border-[#1e2943] rounded-2xl p-8">
           <div className="text-center mb-8">
-            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center mx-auto mb-4">
+            <div className="w-16 h-16 rounded-2xl bg-linear-to-br from-violet-500 to-indigo-600 flex items-center justify-center mx-auto mb-4">
               <span className="text-white text-2xl font-bold">IQ</span>
             </div>
             <h1 className="text-white text-2xl font-bold">Welcome Back</h1>
@@ -50,6 +64,7 @@ const Login: React.FC = () => {
                 className="w-full bg-[#0f1623] border border-[#1e2943] text-white rounded-xl px-4 py-3 focus:outline-none focus:border-violet-500 transition-colors"
                 placeholder="Enter your email"
                 required
+                autoComplete="email"
               />
             </div>
 
@@ -64,6 +79,7 @@ const Login: React.FC = () => {
                 className="w-full bg-[#0f1623] border border-[#1e2943] text-white rounded-xl px-4 py-3 focus:outline-none focus:border-violet-500 transition-colors"
                 placeholder="Enter your password"
                 required
+                autoComplete="current-password"
               />
             </div>
 
@@ -78,7 +94,17 @@ const Login: React.FC = () => {
               disabled={loading}
               className="w-full bg-violet-600 hover:bg-violet-500 text-white font-semibold py-3 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading ? 'Signing in...' : 'Sign In'}
+              {loading ? (
+                <span className="flex items-center justify-center gap-2">
+                  <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Signing in...
+                </span>
+              ) : (
+                'Sign In'
+              )}
             </button>
           </form>
 
@@ -91,11 +117,29 @@ const Login: React.FC = () => {
 
           {/* Demo credentials */}
           <div className="mt-6 p-4 bg-[#0f1623] border border-[#1e2943] rounded-xl">
-            <p className="text-slate-400 text-xs mb-2">Demo Credentials:</p>
-            <div className="space-y-1 text-xs text-slate-300">
-              <p>Admin: admin@interviewiq.com / admin123</p>
-              <p>Candidate: candidate@interviewiq.com / candidate123</p>
-              <p>Interviewer: interviewer@interviewiq.com / interviewer123</p>
+            <p className="text-slate-400 text-xs mb-2 font-medium">🔑 Demo Credentials:</p>
+            <div className="space-y-1 text-xs">
+              <div className="flex items-center justify-between text-slate-300">
+                <span className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-violet-500"></span>
+                  Admin
+                </span>
+                <code className="text-slate-400">admin@interviewiq.com / admin123</code>
+              </div>
+              <div className="flex items-center justify-between text-slate-300">
+                <span className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                  Interviewer
+                </span>
+                <code className="text-slate-400">interviewer@interviewiq.com / interviewer123</code>
+              </div>
+              <div className="flex items-center justify-between text-slate-300">
+                <span className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-green-500"></span>
+                  Candidate
+                </span>
+                <code className="text-slate-400">candidate@interviewiq.com / candidate123</code>
+              </div>
             </div>
           </div>
         </div>
