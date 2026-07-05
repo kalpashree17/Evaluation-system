@@ -2,13 +2,13 @@ import { registerUser, loginUser } from "../services/auth.service.js";
 import { ApiError } from "../utils/ApiError.js";
 
 export const register = async (ctx) => {
-  const { name, email, password } = ctx.request.body;
+  const { name, email, password, role } = ctx.request.body;
 
   if (!name || !email || !password) {
     throw new ApiError(400, "name, email and password are required");
   }
 
-  const user = await registerUser({ name, email, password });
+  const user = await registerUser({ name, email, password, role });
 
   ctx.status = 201;
   ctx.body = { success: true, data: user };

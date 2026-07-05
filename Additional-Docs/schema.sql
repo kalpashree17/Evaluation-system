@@ -9,22 +9,44 @@ CREATE EXTENSION IF NOT EXISTS vector;     -- pgvector, only needed if you store
 -- ------------------------------------------------------------
 -- users
 -- ------------------------------------------------------------
+CREATE TYPE role AS ENUM ('admin', 'user');
+
 CREATE TABLE users (
-    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id            SERIAL PRIMARY KEY,
     name          TEXT NOT NULL,
     email         TEXT UNIQUE NOT NULL,
     password_hash TEXT NOT NULL,
+    role          role NOT NULL DEFAULT 'user',
     created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 -- ------------------------------------------------------------
--- skills (the ~20 options shown on the "select a skill" button)
--- seed this table once, e.g. 'React', 'Data Structures', 'System Design', ...
+-- skills (the fixed list of options shown on the "select a skill" button)
+-- name is constrained to the skill_name enum below, so only these values
+-- can ever be inserted
 -- ------------------------------------------------------------
-CREATE TABLE skills (
-    id    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name  TEXT UNIQUE NOT NULL
+
+
+CREATE TYPE skill_name AS ENUM (
+    'JavaScript',
+    'React',
+    'Data Structures',
+    'System Design',
+    'SQL'
 );
+
+CREATE TABLE skills (
+    id    SERIAL PRIMARY KEY,
+    name  skill_name UNIQUE NOT NULL
+);
+
+INSERT INTO skills (name) VALUES
+    ('JavaScript'),
+    ('React'),
+    ('Data Structures'),
+    ('System Design'),
+    ('SQL')
+ON CONFLICT (name) DO NOTHING;
 
 -- ------------------------------------------------------------
 -- question_bank (the master dataset — seeded/imported by your friend,
@@ -33,7 +55,7 @@ CREATE TABLE skills (
 -- ------------------------------------------------------------
 CREATE TABLE question_bank (
     id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    skill_id          UUID NOT NULL REFERENCES skills(id) ON DELETE CASCADE,
+    skill_id          INT NOT NULL REFERENCES skills(id) ON DELETE CASCADE,
     question_text     TEXT NOT NULL,
     reference_answer  TEXT NOT NULL,      -- expected answer, used for TF-IDF / SBERT scoring
     keywords          TEXT[] NOT NULL,    -- used for Algorithm 1 (keyword matching)
@@ -50,8 +72,8 @@ CREATE TYPE interview_status AS ENUM ('in_progress', 'completed', 'abandoned');
 
 CREATE TABLE interviews (
     id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id             UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    skill_id            UUID NOT NULL REFERENCES skills(id),  -- what the user picked on the select screen
+    user_id             INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    skill_id            INT NOT NULL REFERENCES skills(id),  -- what the user picked on the select screen
     status              interview_status NOT NULL DEFAULT 'in_progress',
     current_difficulty  NUMERIC(3,2) NOT NULL DEFAULT 0.50,  -- 0.0-1.0 scale: adaptive pointer, updated after each score
     starting_level      TEXT NOT NULL DEFAULT 'mid',          -- 'easy' | 'mid' | 'expert', chosen by user at start

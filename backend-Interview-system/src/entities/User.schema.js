@@ -1,16 +1,23 @@
 import { EntitySchema } from "typeorm";
 
+ export const ROLES= ["admin", "user"];
 export const User = new EntitySchema({
   name: "User",
   tableName: "users",
   columns: {
     id: {
-      type: "uuid",
+      type: "int",
       primary: true,
-      generated: "uuid",
+      generated: true,
     },
     name: {
       type: "text",
+    },
+    role: {
+            type: "enum",
+            enum: ROLES,
+            enumName: "role",
+            default: "user",
     },
     email: {
       type: "text",
