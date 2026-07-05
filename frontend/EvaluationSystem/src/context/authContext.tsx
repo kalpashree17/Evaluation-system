@@ -3,7 +3,7 @@ import type { User, AuthState } from '../types/index';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
-export type UserRole = "admin" | "interviewer" | "candidate";
+export type UserRole = "admin" | "user";
 
 interface RegisterData {
   name: string;
@@ -23,8 +23,7 @@ interface AuthContextType extends AuthState {
   logout: () => void;
   hasRole: (role: UserRole | UserRole[]) => boolean;
   isAdmin: () => boolean;
-  isInterviewer: () => boolean;
-  isCandidate: () => boolean;
+  isUser: () => boolean;
 }
 
 // ── Mock data ────────────────────────────────────────────────────────────────
@@ -49,18 +48,10 @@ const MOCK_USERS: MockUser[] = [
   },
   {
     id: '2',
-    name: 'John Candidate',
-    email: 'candidate@interviewiq.com',
-    password: 'candidate123',
-    role: 'candidate',
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: '3',
-    name: 'Jane Interviewer',
-    email: 'interviewer@interviewiq.com',
-    password: 'interviewer123',
-    role: 'interviewer',
+    name: 'John Doe',
+    email: 'user@interviewiq.com',
+    password: 'user1234',
+    role: 'user',
     createdAt: new Date().toISOString(),
   },
 ];
@@ -128,7 +119,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         const token = generateToken();
 
         const userData = userWithoutPassword as User;
-        
+
         setState({
           user: userData,
           token,
@@ -157,9 +148,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         }
 
         // In a real app, the role would be assigned by the server
-        // For demo, we'll use the provided role or default to 'candidate'
-        const role = data.role || 'candidate';
-        
+        // For demo, we'll use the provided role or default to 'user'
+        const role = data.role || 'user';
+
         const newUser: User = {
           id: String(MOCK_USERS.length + 1),
           name: data.name,
@@ -220,28 +211,23 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     return state.user?.role === 'admin';
   };
 
-  const isInterviewer = (): boolean => {
-    return state.user?.role === 'interviewer';
-  };
-
-  const isCandidate = (): boolean => {
-    return state.user?.role === 'candidate';
+  const isUser = (): boolean => {
+    return state.user?.role === 'user';
   };
 
   // ── render ─────────────────────────────────────────────────────────────────
 
   return (
-    <AuthContext.Provider 
-      value={{ 
-        ...state, 
-        login, 
-        register, 
-        logout, 
+    <AuthContext.Provider
+      value={{
+        ...state,
+        login,
+        register,
+        logout,
         hasRole,
         isAdmin,
-        isInterviewer,
-        isCandidate
-      }} 
+        isUser,
+      }}
     >
       {children}
     </AuthContext.Provider>

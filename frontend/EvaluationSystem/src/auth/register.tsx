@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { useAuth } from '../context/authContext';
+import api from '../utils/axiosInstance';
 
-type Role = 'admin' | 'candidate' | 'interviewer';
+type Role = 'admin' | 'user';
 
 interface RegisterFormData {
   name: string;
@@ -10,20 +10,17 @@ interface RegisterFormData {
   password: string;
   confirmPassword: string;
   role: Role;
-  company?: string;
   phone?: string;
 }
 
 const roleDescriptions: Record<Role, string> = {
-  candidate: 'Apply for positions, take interviews, and track your progress.',
-  interviewer: 'Conduct interviews, review candidates, and provide feedback.',
+  user: 'Apply for positions, take interviews, and track your progress.',
   admin: 'Full system access — manage users, roles, and analytics.',
 };
 
 const roles: { value: Role; label: string; icon: string }[] = [
-  { value: 'candidate',   label: 'Candidate',   icon: '👤' },
-  { value: 'interviewer', label: 'Interviewer',  icon: '📋' },
-  { value: 'admin',       label: 'Admin',        icon: '🛡️' },
+  { value: 'user', label: 'User', icon: '👤' },
+  { value: 'admin', label: 'Admin', icon: '🛡️' },
 ];
 
 const features = [
@@ -34,7 +31,7 @@ const features = [
   },
   {
     icon: '📊',
-    title: 'Candidate analytics',
+    title: 'User analytics',
     desc: 'Score, compare and shortlist at a glance.',
   },
   {
@@ -47,12 +44,11 @@ const features = [
 const Register: React.FC = () => {
   const [formData, setFormData] = useState<RegisterFormData>({
     name: '', email: '', password: '', confirmPassword: '',
-    role: 'candidate', company: '', phone: '',
+    role: 'user', phone: '',
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [pwStrength, setPwStrength] = useState(0);
-  const { register } = useAuth();
   const navigate = useNavigate();
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -73,9 +69,11 @@ const Register: React.FC = () => {
   const strengthColors = ['#ef4444', '#f97316', '#eab308', '#22c55e'];
   const strengthLabels = ['Too short', 'Fair', 'Good', 'Strong'];
 
+  // ── POST /auth/register ──────────────────────────────────────────────────
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+
     if (formData.password !== formData.confirmPassword) {
       setError('Passwords do not match');
       return;
@@ -84,13 +82,25 @@ const Register: React.FC = () => {
       setError('Password must be at least 6 characters');
       return;
     }
+
     setLoading(true);
     try {
-      const { confirmPassword, ...registrationData } = formData;
-      await register(registrationData);
+      const response = await api.post('/auth/register', {
+        name: formData.name,
+        email: formData.email,
+        password: formData.password,
+        role: formData.role,
+       
+      });
+
+   
+      const { accessToken, refreshToken } = response?.data ?? {};
+      if (accessToken) localStorage.setItem('accessToken', accessToken);
+      if (refreshToken) localStorage.setItem('refreshToken', refreshToken);
+
       navigate('/login', { state: { message: 'Registration successful! Please sign in.' } });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Registration failed');
+    } catch (err: any) {
+      setError(err?.response?.data?.message || 'Registration failed');
     } finally {
       setLoading(false);
     }
@@ -222,7 +232,7 @@ const Register: React.FC = () => {
             {/* ── YOUR ROLE ── */}
             <p className={sectionHeadingClass}>Your Role</p>
 
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2">
               {roles.map(r => (
                 <button
                   key={r.value}
@@ -250,20 +260,6 @@ const Register: React.FC = () => {
             <p className="text-[11px] text-slate-600 mt-2.5 leading-relaxed">
               {roleDescriptions[formData.role]}
             </p>
-
-            {formData.role === 'interviewer' && (
-              <div className="mt-3">
-                <label className={labelClass}>
-                  Company{' '}
-                  <span className="text-slate-600 normal-case font-normal tracking-normal">(optional)</span>
-                </label>
-                <input
-                  type="text" name="company" value={formData.company}
-                  onChange={handleChange} className={inputClass}
-                  placeholder="Acme Corp"
-                />
-              </div>
-            )}
 
             {/* ── SECURITY ── */}
             <p className={sectionHeadingClass}>Security</p>

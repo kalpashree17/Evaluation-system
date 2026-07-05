@@ -24,10 +24,8 @@ const Login: React.FC = () => {
         case 'admin':
           navigate('/admin/dashboard');
           break;
-        case 'interviewer':
-          navigate('/interviewer/dashboard');
-          break;
-        case 'candidate':
+      
+        case 'user':
           navigate('/candidate/dashboard');
           break;
         default:

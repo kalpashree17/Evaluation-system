@@ -22,6 +22,7 @@ import  SubjectsCard from "../user-role/subjects";
 
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from "../context/authContext";
+import AIInterviewEvaluation from "../user-role/AiPannel";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -67,7 +68,7 @@ const interviewerNavItems: NavItem[] = [
 const candidateNavItems: NavItem[] = [
   { id: "overview", label: "Overview", icon: "dashboard", component: Overview, roles: ['candidate'] },
   { id: "subjects", label: "My Subjects", icon: "subject", component:  SubjectsCard, roles: ['candidate'] },
-//   { id: "practice", label: "Practice", icon: "subject", component: Practice, roles: ['candidate'] },
+  { id: "practice", label: "Practice", icon: "subject", component: AIInterviewEvaluation, roles: ['candidate'] },
 //   { id: "my-results", label: "My Results", icon: "analytics", component: MyResults, roles: ['candidate'] },
 ];
 
