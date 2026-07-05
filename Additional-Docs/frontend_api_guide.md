@@ -13,20 +13,23 @@ the auth token from login sent as a header: `Authorization: Bearer <token>`.
 Request:
 ```json
 {
-  "name": "Smarika",
-  "email": "smarika@example.com",
-  "password": "Smarika@123"
+  "name": "Kalpa",
+  "email": "kalpa@example.com",
+  "password": "Smarika@123",
+  "role": "admin"
 }
 ```
+ROLE MA KEII NARKHEYY.. BY DEFAULT USER JANXA HAII.
 
 Response:
 ```json
 {
     "success": true,
     "data": {
-        "id": "00242ac1-d705-4ef3-b956-e02dc603f632",
-        "name": "Smarika",
-        "email": "smarika@example.com"
+        "id": 1,
+        "name": "Kalpa",
+        "email": "kalpa@example.com",
+        "role": "admin"
     }
 }
 ```
@@ -39,7 +42,7 @@ Response:
 
 Request:
 ```json
-{ "email": "smaran@example.com", "password": "..." }
+{ "email": "kalpa@example.com", "password": "Smarika@123" }
 ```
 
 Response: same shape as register — `{ user, token }`. Save the token, attach it to every
@@ -48,11 +51,12 @@ request after this.
 {
     "success": true,
     "data": {
-        "token": "ePFb_BCemOB3O6SXM",
+        "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOjEsImVtYWlsIjoia2FscGFAZXhhbXBsZS5jb20iLCJyb2xlIjoiYWRtaW4iLCJpYXQiOjE3ODMyNjEyNDMsImV4cCI6MTc4MzM0NzY0M30.-ORzHbT1XOzKHhPVg7xUn1acfPqUgMAUfRpwML0aJAI",
         "user": {
-            "id": "00242ac1-d705-4ef3-b956-e02dc603f632",
-            "name": "Smarika",
-            "email": "smarika@example.com"
+            "id": 1,
+            "name": "Kalpa",
+            "email": "kalpa@example.com",
+            "role": "admin"
         }
     }
 }
@@ -60,17 +64,36 @@ request after this.
 ---
 
 ## 3. Skill + difficulty select screen
+ATTCH ROLE AND TOKKENNE HAIIII.
 
 `GET /api/skills`
 
 Response:
 ```json
 {
-  "skills": [
-    { "id": "uuid-1", "name": "React" },
-    { "id": "uuid-2", "name": "Data Structures" },
-    { "id": "uuid-3", "name": "System Design" }
-  ]
+    "success": true,
+    "data": [
+        {
+            "id": 1,
+            "name": "JavaScript"
+        },
+        {
+            "id": 2,
+            "name": "React"
+        },
+        {
+            "id": 3,
+            "name": "Data Structures"
+        },
+        {
+            "id": 4,
+            "name": "System Design"
+        },
+        {
+            "id": 5,
+            "name": "SQL"
+        }
+    ]
 }
 ```
 
@@ -88,7 +111,7 @@ User has picked one skill + one difficulty band. Send both together:
 Request:
 ```json
 {
-  "skill_id": "uuid-2",
+  "skill_id": "2",
   "starting_level": "mid"
 }
 ```
@@ -97,9 +120,9 @@ Request:
 Response — this already includes your first question, no extra call needed:
 ```json
 {
-  "interview_id": "uuid-abc",
+  "interview_id": "1",
   "question": {
-    "id": "uuid-q1",
+    "id": "1",
     "question_text": "Explain how you'd design a rate limiter.",
     "difficulty_level": 0.50
   }
