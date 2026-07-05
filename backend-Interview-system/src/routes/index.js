@@ -7,6 +7,12 @@ import authRoutes from "./auth.routes.js";
 import skillRoutes from "./skill.routes.js";
 // import the skill-specific router (handles /api/skills)
 
+import interviewRoutes from "./interview.routes.js";
+// import the interview-specific router (handles /api/interviews)
+
+import questionRoutes from "./question.routes.js";
+// import the question-specific router (handles /api/questions/:id/answer)
+
 const router = new Router();
 // create the main/central router for the whole app
 
@@ -15,6 +21,12 @@ router.use(authRoutes.routes(), authRoutes.allowedMethods());
 
 router.use(skillRoutes.routes(), skillRoutes.allowedMethods());
 // mount all skill routes onto the main router
+
+router.use(interviewRoutes.routes(), interviewRoutes.allowedMethods());
+// mount all interview routes onto the main router
+
+router.use(questionRoutes.routes(), questionRoutes.allowedMethods());
+// mount all question routes onto the main router
 // .routes() = the actual route matching/handling logic
 // .allowedMethods() = auto-handles 405/501 for unsupported HTTP methods on auth routes
 

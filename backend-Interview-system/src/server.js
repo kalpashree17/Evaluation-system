@@ -5,6 +5,7 @@ import dotenv from "dotenv";
 import app from "./app.js";
 import { AppDataSource } from "./config/data-source.js";
 import { seedSkills } from "./config/seed.js";
+import { seedQuestionBank } from "./config/seedQuestionBank.js";
 
 dotenv.config(); //this lets us to use process.env to access env files.
 
@@ -16,6 +17,7 @@ const start = async () => {
     console.log("Database connected");
 
     await seedSkills(); //re-inserts the default skills if missing, e.g. after DB_SYNC rebuilds the table
+    await seedQuestionBank(); // loads question_bank rows from the CSV, safely skips existing ids
 
     app.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);
