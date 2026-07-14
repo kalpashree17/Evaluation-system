@@ -10,7 +10,7 @@ interface RegisterFormData {
   password: string;
   confirmPassword: string;
   role: Role;
-  phone?: string;
+  // phone?: string;
 }
 
 const roleDescriptions: Record<Role, string> = {
@@ -44,7 +44,7 @@ const features = [
 const Register: React.FC = () => {
   const [formData, setFormData] = useState<RegisterFormData>({
     name: '', email: '', password: '', confirmPassword: '',
-    role: 'user', phone: '',
+    role: 'user', 
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -215,7 +215,7 @@ const Register: React.FC = () => {
                   autoComplete="email"
                 />
               </div>
-              <div className="col-span-2">
+              {/* <div className="col-span-2">
                 <label className={labelClass}>
                   Phone{' '}
                   <span className="text-slate-600 normal-case font-normal tracking-normal">(optional)</span>
@@ -226,7 +226,7 @@ const Register: React.FC = () => {
                   placeholder="+1 555 000 0000"
                   autoComplete="tel"
                 />
-              </div>
+              </div> */}
             </div>
 
             {/* ── YOUR ROLE ── */}

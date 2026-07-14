@@ -10,15 +10,10 @@ import Evaluation from "../admin-dashboard/evaluation";
 import Analytics from "../admin-dashboard/analytics";
 import Users from "../admin-dashboard/users";
 
-// Candidate-specific components
-import  SubjectsCard from "../user-role/subjects";
-// import MyResults from "../candidate-dashboard/myResults";
-// import Practice from "../candidate-dashboard/practice";
-
-// Interviewer-specific components
-// import AssignedInterviews from "../interviewer-dashboard/assignedInterviews";
-// import ConductInterviews from "../interviewer-dashboard/conductInterviews";
-// import Feedback from "../interviewer-dashboard/feedback";
+// User-specific components
+import SubjectsCard from "../user-role/subjects";
+// import MyResults from "../user-dashboard/myResults";
+// import Practice from "../user-dashboard/practice";
 
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from "../context/authContext";
@@ -26,11 +21,13 @@ import AIInterviewEvaluation from "../user-role/AiPannel";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
+type Role = 'admin' | 'user';
+
 interface NavbarProps {
   module: string;
   setModule: (module: string) => void;
   sidebarOpen: boolean;
-  role?: 'admin' | 'interviewer' | 'candidate';
+  role?: Role | null;
 }
 
 export interface NavItem {
@@ -38,7 +35,7 @@ export interface NavItem {
   label: string;
   icon: string;
   component: React.ComponentType;
-  roles?: ('admin' | 'interviewer' | 'candidate')[];
+  roles?: Role[];
 }
 
 // ── Nav config per role ──────────────────────────────────────────────────────
@@ -50,54 +47,41 @@ const adminNavItems: NavItem[] = [
   { id: "questions", label: "Question Bank", icon: "question", component: QuestionBank, roles: ['admin'] },
   { id: "interviews", label: "Interviews", icon: "interview", component: Interviews, roles: ['admin'] },
   { id: "candidates", label: "Candidates", icon: "candidate", component: Candidates, roles: ['admin'] },
-  { id: "evaluation", label: "Evaluation", icon: "evaluate", component: Evaluation, roles: ['admin', 'interviewer'] },
+  { id: "evaluation", label: "Evaluation", icon: "evaluate", component: Evaluation, roles: ['admin'] },
   { id: "analytics", label: "Analytics", icon: "analytics", component: Analytics, roles: ['admin'] },
   { id: "users", label: "Users", icon: "users", component: Users, roles: ['admin'] },
 ];
 
-// Interviewer navigation items
-const interviewerNavItems: NavItem[] = [
-  { id: "overview", label: "Overview", icon: "dashboard", component: Overview, roles: ['interviewer'] },
-//   { id: "assigned-interviews", label: "Assigned Interviews", icon: "interview", component: AssignedInterviews, roles: ['interviewer'] },
-//   { id: "conduct-interviews", label: "Conduct Interviews", icon: "evaluate", component: ConductInterviews, roles: ['interviewer'] },
-//   { id: "feedback", label: "Feedback", icon: "analytics", component: Feedback, roles: ['interviewer'] },
-  { id: "evaluation", label: "Evaluation", icon: "evaluate", component: Evaluation, roles: ['admin', 'interviewer'] },
-];
-
-// Candidate navigation items
-const candidateNavItems: NavItem[] = [
-  { id: "overview", label: "Overview", icon: "dashboard", component: Overview, roles: ['candidate'] },
-  { id: "subjects", label: "My Subjects", icon: "subject", component:  SubjectsCard, roles: ['candidate'] },
-  { id: "practice", label: "Practice", icon: "subject", component: AIInterviewEvaluation, roles: ['candidate'] },
-//   { id: "my-results", label: "My Results", icon: "analytics", component: MyResults, roles: ['candidate'] },
+// User navigation items
+const userNavItems: NavItem[] = [
+  { id: "overview", label: "Overview", icon: "dashboard", component: Overview, roles: ['user'] },
+  { id: "subjects", label: "My Subjects", icon: "subject", component: SubjectsCard, roles: ['user'] },
+  { id: "practice", label: "Practice", icon: "subject", component: AIInterviewEvaluation, roles: ['user'] },
+  // { id: "my-results", label: "My Results", icon: "analytics", component: MyResults, roles: ['user'] },
 ];
 
 // Get nav items based on role
-const getNavItemsForRole = (role?: string): NavItem[] => {
+const getNavItemsForRole = (role?: Role | string | null): NavItem[] => {
   if (!role) return adminNavItems;
-  
+
   switch (role) {
     case 'admin':
       return adminNavItems;
-    case 'interviewer':
-      return interviewerNavItems;
-    case 'candidate':
-      return candidateNavItems;
+    case 'user':
+      return userNavItems;
     default:
       return adminNavItems;
   }
 };
 
 // Get default module for role
-const getDefaultModule = (role?: string): string => {
+const getDefaultModule = (role?: Role | string | null): string => {
   if (!role) return 'overview';
-  
+
   switch (role) {
     case 'admin':
       return 'overview';
-    case 'interviewer':
-      return 'overview';
-    case 'candidate':
+    case 'user':
       return 'overview';
     default:
       return 'overview';
@@ -109,31 +93,39 @@ const getDefaultModule = (role?: string): string => {
 export const Navbar = ({ module, setModule, sidebarOpen, role }: NavbarProps) => {
   const navigate = useNavigate();
   const { logout, user } = useAuth();
-  
+
+  // Fall back to the localStorage-persisted user if context user isn't populated
+  const storedUser = JSON.parse(localStorage.getItem('user') || 'null');
+  const effectiveRole: Role | undefined = role ?? user?.role ?? storedUser?.role;
+  const displayName: string = user?.name ?? storedUser?.name ?? 'User';
+
   // Get nav items based on role
-  const navItems = getNavItemsForRole(role || user?.role);
-  
-  // Filter nav items based on user role
+  const navItems = getNavItemsForRole(effectiveRole);
+
+  // Filter nav items based on the effective role
   const filteredNavItems = navItems.filter(item => {
     if (!item.roles) return true;
-    return item.roles.includes(user?.role as any);
+    return item.roles.includes(effectiveRole as Role);
   });
 
   const handleLogout = () => {
     logout();
+    localStorage.removeItem('token');
+    localStorage.removeItem('role');
+    localStorage.removeItem('user');
     navigate('/login');
   };
 
   // Get user initials
   const getUserInitials = () => {
-    if (!user?.name) return 'U';
-    return user.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+    if (!displayName || displayName === 'User') return 'U';
+    return displayName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
   };
 
   // Get role display name
   const getRoleDisplay = () => {
-    if (!user?.role) return 'User';
-    return user.role.charAt(0).toUpperCase() + user.role.slice(1);
+    if (!effectiveRole) return 'User';
+    return effectiveRole.charAt(0).toUpperCase() + effectiveRole.slice(1);
   };
 
   return (
@@ -183,7 +175,7 @@ export const Navbar = ({ module, setModule, sidebarOpen, role }: NavbarProps) =>
           </div>
           {sidebarOpen && (
             <div className="flex-1 min-w-0">
-              <p className="text-white text-sm font-medium truncate">{user?.name || 'User'}</p>
+              <p className="text-white text-sm font-medium truncate">{displayName}</p>
               <p className="text-slate-500 text-xs capitalize">{getRoleDisplay()}</p>
             </div>
           )}
@@ -202,4 +194,4 @@ export const Navbar = ({ module, setModule, sidebarOpen, role }: NavbarProps) =>
   );
 };
 
-export { adminNavItems, interviewerNavItems, candidateNavItems, getNavItemsForRole, getDefaultModule };
+export { adminNavItems, userNavItems, getNavItemsForRole, getDefaultModule };

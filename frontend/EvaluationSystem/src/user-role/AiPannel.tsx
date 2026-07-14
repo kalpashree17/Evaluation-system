@@ -7,24 +7,24 @@ import {
   Tag,
   Avatar,
   Badge,
-  ConfigProvider,
-  theme as antdTheme,
 } from "antd";
 import {
   RobotOutlined,
   UserOutlined,
-  LoadingOutlined,
   ThunderboltOutlined,
   CheckCircleOutlined,
   CloseCircleOutlined,
-  ClockCircleOutlined,
   FileTextOutlined,
   BarChartOutlined,
   BulbOutlined,
   SolutionOutlined,
   ArrowRightOutlined,
+  AudioOutlined,
+  AudioFilled,
+  SoundOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
+import api from "../utils/axiosInstance";
 
 // ==================== INTERFACES ====================
 
@@ -34,7 +34,6 @@ interface Question {
   question: string;
   difficulty: "easy" | "medium" | "hard";
   expected_keywords: string[];
-  time_limit_seconds?: number;
 }
 
 interface EvaluationCriteria {
@@ -73,15 +72,21 @@ interface Message {
   isTyping?: boolean;
 }
 
+interface Skill {
+  _id: string;
+  name: string;
+}
+
 interface InterviewSession {
   id: string;
   candidateName: string;
   jobRole: string;
   experienceLevel: "entry" | "mid" | "senior" | "lead";
+  skills: string[];
   questions: Question[];
   currentQuestionIndex: number;
   startTime: Date;
-  status: any; 
+  status: any;
   responses: InterviewResponse[];
 }
 
@@ -146,16 +151,13 @@ const QUESTION_TEMPLATES: Record<
   ],
 };
 
-const TIME_LIMITS: Record<Question["difficulty"], number> = {
-  easy: 30,
-  medium: 45,
-  hard: 60,
-};
+
 
 const generateSession = (
   candidateName: string,
   jobRole: string,
-  experienceLevel: InterviewSession["experienceLevel"]
+  experienceLevel: InterviewSession["experienceLevel"],
+  skills: string[] = []
 ): InterviewSession => {
   const plan: Question["category"][] = ["general", "technical", "technical", "problem_solving", "behavioral"];
 
@@ -175,7 +177,6 @@ const generateSession = (
       question: template.text(jobRole || "this"),
       difficulty,
       expected_keywords: template.keywords,
-      time_limit_seconds: TIME_LIMITS[difficulty],
     };
   });
 
@@ -184,6 +185,7 @@ const generateSession = (
     candidateName,
     jobRole,
     experienceLevel,
+    skills,
     questions,
     currentQuestionIndex: 0,
     startTime: new Date(),
@@ -197,95 +199,122 @@ const generateSession = (
 const SetupScreen = ({
   onStart,
 }: {
-  onStart: (name: string, role: string, level: InterviewSession["experienceLevel"]) => void;
+  onStart: (
+    name: string,
+    jobRole: string,
+    level: InterviewSession["experienceLevel"],
+    skills: string[]
+  ) => void;
 }) => {
   const [candidateName, setCandidateName] = useState("");
   const [jobRole, setJobRole] = useState("");
   const [experienceLevel, setExperienceLevel] = useState<InterviewSession["experienceLevel"]>("mid");
-  const [recordingDuration, setRecordingDuration] = useState(0);
-  const handleStart = () => {
-    if (!candidateName.trim() || !jobRole.trim()) {
-      message.warning("Please fill in your name and job role");
-      return;
-    }
-    onStart(candidateName.trim(), jobRole.trim(), experienceLevel);
-  };
+  const [skillOptions, setSkillOptions] = useState<Skill[]>([]);
+  const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
+
+  useEffect(() => {
+    const fetchSkills = async () => {
+      try {
+        const response = await api.get('/skills');
+        setSkillOptions(response.data?.data || []);
+      } catch {
+        // Silently fail – skills field is optional
+      }
+    };
+    fetchSkills();
+  }, []);
+
+const handleStart = () => {
+  if (!candidateName.trim()) {
+    message.warning("Please fill in your name");
+    return;
+  }
+  onStart(candidateName.trim(), jobRole.trim(), experienceLevel, selectedSkills);
+};
 
   return (
     <div className="flex items-center justify-center min-h-[70vh] px-4">
-      <div className="w-full max-w-sm">
-        <div className="flex items-center gap-3 mb-8">
-          <div className="relative w-11 h-11 shrink-0 flex items-center justify-center">
-            <span className="absolute inset-0 rounded-full bg-purple-600/30 blur-lg animate-pulse" />
-            <div className="relative w-11 h-11 rounded-full border border-purple-500/50 bg-black flex items-center justify-center">
-              <RobotOutlined className="text-purple-400 text-lg" />
+      <div className="w-full max-w-md">
+        <div className="bg-[#141928] border border-[#1e2943] rounded-2xl p-8 shadow-lg">
+          <div className="flex items-center gap-4 mb-8">
+            <div className="relative w-12 h-12 shrink-0">
+              <span className="absolute inset-0 rounded-xl bg-violet-600/30 blur-lg animate-pulse" />
+              <div className="relative w-12 h-12 rounded-xl bg-linear-to-br from-violet-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-violet-500/20">
+                <RobotOutlined className="text-white text-lg" />
+              </div>
+            </div>
+            <div>
+              <div className="text-white font-bold text-lg tracking-tight">
+                AI Interview
+              </div>
+              <div className="text-slate-500 text-xs mt-0.5">Begin your interview session</div>
             </div>
           </div>
-          <div>
-            <div className="text-purple-300 font-semibold tracking-tight text-lg leading-none" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
-              AI Interview
+
+          <div className="space-y-5">
+            <div>
+              <label className="block text-xs uppercase tracking-wider text-slate-400 mb-1.5 font-medium">
+                Your name
+              </label>
+              <input
+                value={candidateName}
+                onChange={(e) => setCandidateName(e.target.value)}
+                // onKeyDown={(e) => { if (e.key === "Enter") handleStart(); }}
+                placeholder="Jordan Lee"
+                className="w-full bg-[#0d1221] border border-[#1e2943] text-white placeholder-slate-600 px-4 py-2.5 rounded-xl text-sm outline-none focus:border-violet-500/50 transition-colors"
+              />
             </div>
-            <div className="text-purple-700 text-xs mt-1">Begin your interview session</div>
-          </div>
-        </div>
 
-        <div className="space-y-5">
-          <div>
-            <label className="block text-xs uppercase tracking-wider text-purple-500 mb-1.5">
-              Your name
-            </label>
-            <input
-              value={candidateName}
-              onChange={(e) => setCandidateName(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") handleStart(); }}
-              placeholder="Jordan Lee"
-              className="w-full bg-transparent border-0 border-b border-purple-900 text-purple-200 px-0 py-2 text-base outline-none"
-            />
-          </div>
+           
 
-          <div>
-            <label className="block text-xs uppercase tracking-wider text-purple-500 mb-1.5">
-              Role you're interviewing for
-            </label>
-            <input
-              value={jobRole}
-              onChange={(e) => setJobRole(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") handleStart(); }}
-              placeholder="Full Stack Developer"
-              className="w-full bg-transparent border-0 border-b border-purple-900 text-purple-200 px-0 py-2 text-base outline-none"
-            />
-          </div>
+            <div>
+              <label className="block text-xs uppercase tracking-wider text-slate-400 mb-1.5 font-medium">
+                Skills interested in
+              </label>
+              <Select
+                mode="multiple"
+                value={selectedSkills}
+                onChange={(value) => setSelectedSkills(value)}
+                size="large"
+              
 
-          <div>
-            <label className="block text-xs uppercase tracking-wider text-purple-500 mb-1.5">
-              Experience level
-            </label>
-            <Select
-              value={experienceLevel}
-              onChange={(value) => setExperienceLevel(value)}
+                  className="w-full! bg-[#0d1221]! border! border-[#1e2943]! text-white! placeholder-slate-600! px-4! py-2.5! rounded-xl! text-sm! outline-none! focus:border-violet-500/50! transition-colors!"
+              
+                // popupClassName="bg-[#141928]! border! border-[#1e2943]! text-white!"
+                options={skillOptions.map((s) => ({ label: s.name, value: s.name }))}
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs uppercase tracking-wider text-slate-400 mb-1.5 font-medium">
+                Experience level
+              </label>
+              <Select
+                value={experienceLevel}
+                onChange={(value) => setExperienceLevel(value)}
+                size="large"
+              
+                className="w-full! bg-[#0d1221]! border! border-[#1e2943]! text-white! placeholder-slate-600! px-4! py-2.5! rounded-xl! text-sm! outline-none! focus:border-violet-500/50! transition-colors!"
+                options={[
+                  { label: "Entry level", value: "entry" },
+                  { label: "Mid level", value: "mid" },
+                  { label: "Senior level", value: "senior" },
+                ]}
+              />
+            </div>
+
+            <Button
+              type="primary"
               size="large"
-              variant="borderless"
-              className="w-full custom-dark-select"
-              options={[
-                { label: "Entry level", value: "entry" },
-                { label: "Mid level", value: "mid" },
-                { label: "Senior level", value: "senior" },
-                { label: "Lead / Manager", value: "lead" },
-              ]}
-            />
+              block
+              onClick={handleStart}
+              icon={<ArrowRightOutlined />}
+              iconPosition="end"
+              className="!bg-linear-to-r !from-violet-600 !to-indigo-600 !border-0 !rounded-xl !h-11 !font-semibold !shadow-lg !shadow-violet-500/20 hover:!shadow-violet-500/40 !transition-all !mt-2"
+            >
+              Begin interview
+            </Button>
           </div>
-
-          <Button
-            type="primary"
-            size="large"
-            block
-            onClick={handleStart}
-            icon={<ArrowRightOutlined />}
-            iconPosition="end"
-            className="bg-purple-700! hover:bg-purple-600! border-0! rounded-lg! h-11! font-medium! mt-2!"
-          >
-            Begin interview
-          </Button>
         </div>
       </div>
     </div>
@@ -352,6 +381,66 @@ function closeAudioContext(ctx: AudioContext | null) {
   ctx.close().catch(() => {});
 }
 
+// ==================== PER-QUESTION REVIEW GENERATOR ====================
+
+function generateReview(question: Question, timeSpent: number): EvaluationResult {
+  const score = Math.min(10, Math.max(3, Math.round(timeSpent / 6)));
+
+  const strengths: string[] = [];
+  const weaknesses: string[] = [];
+
+  if (timeSpent >= 20) {
+    strengths.push("Provided a detailed response");
+  } else {
+    weaknesses.push("Consider providing more detail");
+  }
+
+  if (timeSpent >= 15) {
+    strengths.push("Good response length");
+  } else {
+    weaknesses.push("Response could be more comprehensive");
+  }
+
+  if (question.category === "technical" && timeSpent >= 25) {
+    strengths.push("Demonstrated technical depth");
+  }
+
+  if (question.category === "behavioral" && timeSpent >= 20) {
+    strengths.push("Showed strong communication skills");
+  }
+
+  if (timeSpent < 10) {
+    weaknesses.push("Answer was too brief");
+  }
+
+  return {
+    overallScore: score,
+    maxScore: 10,
+    criteria: [
+      {
+        category: "Completeness",
+        score: Math.min(10, Math.max(1, Math.round(timeSpent / 5))),
+        maxScore: 10,
+        feedback: timeSpent >= 20 ? "Good coverage of the topic" : "Consider elaborating further",
+        strengths: [],
+        areasForImprovement: [],
+      },
+      {
+        category: "Relevance",
+        score: Math.min(10, Math.max(6, score)),
+        maxScore: 10,
+        feedback: "Response was on topic",
+        strengths: [],
+        areasForImprovement: [],
+      },
+    ],
+    summary: `You spoke for ${timeSpent} seconds. ${timeSpent >= 20 ? "Good depth in your response." : "Try to elaborate more in future answers."}`,
+    recommendations: timeSpent < 15 ? ["Try to provide more detailed answers with examples"] : ["Keep up the good level of detail"],
+    strengths,
+    weaknesses,
+  };
+}
+
 // ==================== MAIN COMPONENT ====================
 
 export const AIInterviewEvaluation = () => {
@@ -362,18 +451,21 @@ export const AIInterviewEvaluation = () => {
   const [showEvaluation, setShowEvaluation] = useState(false);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [totalQuestions, setTotalQuestions] = useState(0);
-  const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
 
   // ===== COUNTDOWN STATE =====
   const [showCountdown, setShowCountdown] = useState(false);
   const [countdownValue, setCountdownValue] = useState(3);
-
   // ===== AUDIO RECORDING STATE =====
   const [isRecording, setIsRecording] = useState(false);
   const [audioResponses, setAudioResponses] = useState<Record<string, Blob>>({});
   const [recordingDuration, setRecordingDuration] = useState(0);
   // ===== INTERVIEW PHASE =====
-  const [phase, setPhase] = useState<"countdown" | "question" | "recording" | "idle">("idle");
+  // "ready"    -> welcome message shown, waiting for candidate to click the mic to begin
+  // "countdown"-> 3..2..1 countdown running
+  // "question" -> a question is displayed, waiting for candidate to click mic to answer
+  // "recording"-> actively recording the candidate's answer
+  // "idle"     -> transitional / processing state
+  const [phase, setPhase] = useState<"ready" | "countdown" | "question" | "recording" | "idle">("idle");
 
   // ===== REFS =====
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -388,6 +480,11 @@ export const AIInterviewEvaluation = () => {
   const rawPcmRef = useRef<Float32Array[]>([]);
   const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const sampleRateRef = useRef<number>(48000);
+
+  // Waveform visualization refs
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const waveformCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const animationFrameRef = useRef<number | null>(null);
 
   // ===== SCROLL TO BOTTOM =====
   const scrollToBottom = () => {
@@ -406,12 +503,84 @@ export const AIInterviewEvaluation = () => {
     streamRef.current = null;
     closeAudioContext(audioContextRef.current);
     audioContextRef.current = null;
+    analyserRef.current = null;
+  };
+
+  // ===== WAVEFORM DRAW LOOP =====
+  const drawWaveform = () => {
+    const analyser = analyserRef.current;
+    const canvas = waveformCanvasRef.current;
+    if (!analyser || !canvas) return;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const bufferLength = analyser.frequencyBinCount;
+    const dataArray = new Uint8Array(bufferLength);
+    analyser.getByteFrequencyData(dataArray);
+
+    const width = canvas.width;
+    const height = canvas.height;
+    ctx.clearRect(0, 0, width, height);
+
+    const barCount = 40;
+    const step = Math.max(1, Math.floor(bufferLength / barCount));
+    const gap = 3;
+    const barWidth = width / barCount - gap;
+
+    for (let i = 0; i < barCount; i++) {
+      let sum = 0;
+      let count = 0;
+      for (let j = 0; j < step; j++) {
+        const idx = i * step + j;
+        if (idx < bufferLength) {
+          sum += dataArray[idx];
+          count++;
+        }
+      }
+      const avg = count > 0 ? sum / count : 0;
+      // A little easing so quiet moments still show a small idle bar
+      const normalized = avg / 255;
+      const barHeight = Math.max(3, normalized * height);
+
+      const x = i * (barWidth + gap);
+      const y = (height - barHeight) / 2;
+
+      const gradient = ctx.createLinearGradient(0, y, 0, y + barHeight);
+      gradient.addColorStop(0, "#ffffff");
+      gradient.addColorStop(1, "#94a3b8");
+      ctx.fillStyle = gradient;
+
+      const radius = Math.min(barWidth / 2, 3);
+      ctx.beginPath();
+      if (typeof (ctx as any).roundRect === "function") {
+        (ctx as any).roundRect(x, y, barWidth, barHeight, radius);
+      } else {
+        ctx.rect(x, y, barWidth, barHeight);
+      }
+      ctx.fill();
+    }
+
+    animationFrameRef.current = requestAnimationFrame(drawWaveform);
+  };
+
+  const stopWaveformLoop = () => {
+    if (animationFrameRef.current !== null) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
+    const canvas = waveformCanvasRef.current;
+    const ctx = canvas?.getContext("2d");
+    if (ctx && canvas) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
   };
 
   useEffect(() => {
     const timer = timerRef.current;
     return () => {
       if (timer) clearInterval(timer);
+      stopWaveformLoop();
       stopRecordingTracks();
     };
   }, []);
@@ -431,6 +600,12 @@ export const AIInterviewEvaluation = () => {
       const source = audioCtx.createMediaStreamSource(stream);
       const processor = audioCtx.createScriptProcessor(4096, 1, 1);
 
+      // Analyser node powers the live waveform visualization
+      const analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 128;
+      analyser.smoothingTimeConstant = 0.75;
+      analyserRef.current = analyser;
+
       rawPcmRef.current = [];
 
       processor.onaudioprocess = (event) => {
@@ -440,24 +615,18 @@ export const AIInterviewEvaluation = () => {
 
       source.connect(processor);
       processor.connect(audioCtx.destination);
-
-      const currentQ = session.questions[currentQuestionIndex];
-      const timeLimit = currentQ.time_limit_seconds || 30;
+      source.connect(analyser);
 
       setIsRecording(true);
       setPhase("recording");
-      setTimeRemaining(timeLimit);
       setRecordingDuration(0);
 
+      // Kick off the live waveform render loop
+      animationFrameRef.current = requestAnimationFrame(drawWaveform);
+
+      // No time limit — user speaks freely until they click Stop
       recordingTimerRef.current = setInterval(() => {
-        setRecordingDuration((prev) => {
-          const next = prev + 1;
-          setTimeRemaining(timeLimit - next);
-          if (next >= timeLimit) {
-            stopRecording();
-          }
-          return next;
-        });
+        setRecordingDuration((prev) => prev + 1);
       }, 1000);
 
     } catch (error) {
@@ -474,13 +643,13 @@ export const AIInterviewEvaluation = () => {
       recordingTimerRef.current = null;
     }
 
+    stopWaveformLoop();
     setIsRecording(false);
 
     // Collect raw PCM data
     const rawChunks = rawPcmRef.current;
     rawPcmRef.current = [];
 
-    // Calculate total length
     let totalLength = 0;
     for (const chunk of rawChunks) {
       totalLength += chunk.length;
@@ -493,7 +662,6 @@ export const AIInterviewEvaluation = () => {
       return;
     }
 
-    // Combine all chunks
     const combined = new Float32Array(totalLength);
     let offset = 0;
     for (const chunk of rawChunks) {
@@ -501,25 +669,54 @@ export const AIInterviewEvaluation = () => {
       offset += chunk.length;
     }
 
-    // Encode as WAV
     const sampleRate = sampleRateRef.current;
     const wavBuffer = encodeWav(combined, sampleRate);
     const wavBlob = new Blob([wavBuffer], { type: "audio/wav" });
 
     stopRecordingTracks();
 
-    // Store in state
     const currentQ = session!.questions[currentQuestionIndex];
     setAudioResponses((prev) => ({ ...prev, [currentQ.id]: wavBlob }));
 
-    // Record response time
-    const timeSpent = Math.round((Date.now() - questionStartRef.current) / 1000); // eslint-disable-line react-hooks/purity
+    const timeSpent = Math.round((Date.now() - questionStartRef.current) / 1000);
     responsesRef.current.push({ questionId: currentQ.id, answer: "", timeSpent });
 
     setPhase("idle");
 
-    // Move to next question
-    setTimeout(() => moveToNextQuestion(), 800);
+    // Generate and show per-question review
+    const review = generateReview(currentQ, timeSpent);
+    const reviewMessage: Message = {
+      id: nextId("review"),
+      type: "system",
+      content: `Answer Review — Question ${currentQuestionIndex + 1}/${session!.questions.length}`,
+      timestamp: new Date(),
+      evaluation: review,
+    };
+    setMessages((prev) => [...prev, reviewMessage]);
+
+    setTimeout(() => moveToNextQuestion(), 2500);
+  };
+
+  // ===== TOGGLE RECORDING (used once the interview is underway, to answer a question) =====
+  const handleMicClick = () => {
+    if (isRecording) {
+      stopRecording();
+    } else {
+      startRecording();
+    }
+  };
+
+  // ===== EXPLICIT STOP BUTTON (ends the recording, distinct from the mic toggle) =====
+  const handleStopClick = () => {
+    if (isRecording) {
+      stopRecording();
+    }
+  };
+
+  // ===== CANDIDATE CLICKS THE MIC ON THE WELCOME SCREEN TO KICK OFF THE INTERVIEW =====
+  const handleBeginInterviewClick = () => {
+    if (phase !== "ready") return;
+    startCountdown();
   };
 
   // ===== COUNTDOWN =====
@@ -550,28 +747,24 @@ export const AIInterviewEvaluation = () => {
     const questionMessage: Message = {
       id: nextId("q"),
       type: "interviewer",
-      content: `**Question 1/${session.questions.length}** (${firstQ.category.replace("_", " ")})\n\n${firstQ.question}\n\n_${firstQ.difficulty} difficulty_ — _You have ${firstQ.time_limit_seconds} seconds to respond_`,
+      content: `Question ${1}/${session.questions.length}`,
       timestamp: new Date(),
       question: firstQ,
     };
 
     setMessages((prev) => [...prev, questionMessage]);
-    questionStartRef.current = Date.now(); // eslint-disable-line react-hooks/purity
+    questionStartRef.current = Date.now();
     setPhase("question");
-
-    // Wait 2 seconds after displaying question, then start recording
-    setTimeout(() => {
-      startRecording();
-    }, 2000);
   };
 
   // ===== INITIALIZE INTERVIEW =====
   const initializeInterview = (
     candidateName: string,
     jobRole: string,
-    experienceLevel: InterviewSession["experienceLevel"]
+    experienceLevel: InterviewSession["experienceLevel"],
+    skills: string[] = []
   ) => {
-    const sessionData = generateSession(candidateName, jobRole, experienceLevel);
+    const sessionData = generateSession(candidateName, jobRole, experienceLevel, skills);
     perQuestionEvalsRef.current = {};
     responsesRef.current = [];
 
@@ -585,14 +778,15 @@ export const AIInterviewEvaluation = () => {
     const welcomeMessage: Message = {
       id: nextId("welcome"),
       type: "system",
-      content: `**Welcome, ${candidateName}**\n\nYou'll be asked ${sessionData.questions.length} questions. Each question will be displayed, then your microphone will automatically activate to record your response.\n\nGood luck!`,
+      content: `Welcome, ${candidateName}!`,
       timestamp: new Date(),
     };
 
     setMessages([welcomeMessage]);
 
-    // Start countdown after welcome message
-    setTimeout(() => startCountdown(), 2000);
+    // Wait for the candidate to click the microphone below instead of
+    // auto-starting the countdown.
+    setPhase("ready");
   };
 
   // ===== MOVE TO NEXT QUESTION =====
@@ -611,25 +805,21 @@ export const AIInterviewEvaluation = () => {
     const questionMessage: Message = {
       id: nextId("q"),
       type: "interviewer",
-      content: `**Question ${nextIndex + 1}/${session.questions.length}** (${nextQ.category.replace("_", " ")})\n\n${nextQ.question}\n\n_${nextQ.difficulty} difficulty_ — _You have ${nextQ.time_limit_seconds} seconds to respond_`,
+      content: `Question ${nextIndex + 1}/${session.questions.length}`,
       timestamp: new Date(),
       question: nextQ,
     };
 
     setMessages((prev) => [...prev, questionMessage]);
-    questionStartRef.current = Date.now(); // eslint-disable-line react-hooks/purity
+    questionStartRef.current = Date.now();
     setPhase("question");
-
-    // Wait 2 seconds after displaying question, then start recording
-    setTimeout(() => {
-      startRecording();
-    }, 2000);
   };
 
   // ===== COMPLETE INTERVIEW =====
   const completeInterview = () => {
     if (!session) return;
 
+    stopWaveformLoop();
     stopRecordingTracks();
     setIsRecording(false);
     if (recordingTimerRef.current) {
@@ -643,48 +833,11 @@ export const AIInterviewEvaluation = () => {
     const completionMessage: Message = {
       id: nextId("complete"),
       type: "system",
-      content: `**Interview complete**\n\nAll questions have been answered. Your audio responses have been recorded.\n\nTotal audio responses: ${Object.keys(audioResponses).length}`,
+      content: `Interview complete!`,
       timestamp: new Date(),
     };
 
     setMessages((prev) => [...prev, completionMessage]);
-  };
-
-  // ===== FORMAT MESSAGE CONTENT =====
-  const formatMessageContent = (content: string) => {
-    return content.split("\n").map((line, i) => {
-      if (line.startsWith("•")) {
-        return (
-          <div key={i} className="flex items-start gap-2 ml-2">
-            <span className="text-purple-400">•</span>
-            <span>{line.substring(1)}</span>
-          </div>
-        );
-      }
-      if (line.startsWith("_") && line.endsWith("_")) {
-        return (
-          <div key={i} className="text-indigo-500/70 text-sm italic ml-0.5">
-            {line.replace(/_/g, "")}
-          </div>
-        );
-      }
-      if (line.startsWith("**") && line.endsWith("**")) {
-        return (
-          <div key={i} className="font-semibold mt-2 text-purple-200">
-            {line.replace(/\*\*/g, "")}
-          </div>
-        );
-      }
-      if (line.startsWith("---")) {
-        return <hr key={i} className="my-2 border-indigo-900/60" />;
-      }
-      if (line.trim() === "") return <br key={i} />;
-      return (
-        <div key={i} className="leading-relaxed">
-          {line}
-        </div>
-      );
-    });
   };
 
   // ===== GET DIFFICULTY COLOR =====
@@ -721,85 +874,85 @@ export const AIInterviewEvaluation = () => {
     const pct = Math.round((evaluationResult.overallScore / evaluationResult.maxScore) * 100);
 
     return (
-      <div className="mt-4 rounded-2xl border border-purple-900/60 bg-[#0a0510] p-5 shadow-[0_0_40px_-15px_rgba(168,85,247,0.35)]">
-        <div className="flex items-center gap-3 mb-4">
-          <BarChartOutlined className="text-xl text-purple-400" />
-          <h2 className="text-base font-semibold text-purple-200" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
-            Interview Evaluation
-          </h2>
+      <div className="bg-[#141928] border border-[#1e2943] rounded-2xl p-6 shadow-lg">
+        <div className="flex items-center gap-3 mb-5">
+          <div className="w-9 h-9 rounded-xl bg-linear-to-br from-violet-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-violet-500/20">
+            <BarChartOutlined className="text-white text-sm" />
+          </div>
+          <h2 className="text-white font-bold text-base">Interview Evaluation</h2>
           <Badge count={`${evaluationResult.overallScore}/${evaluationResult.maxScore}`} color="#7c3aed" />
         </div>
 
-        <div className="mb-4">
-          <div className="flex justify-between text-sm text-purple-400">
+        <div className="mb-5">
+          <div className="flex justify-between text-sm text-slate-400 mb-1">
             <span>Overall score</span>
-            <span className="font-semibold text-purple-200">{pct}%</span>
+            <span className="font-semibold text-white">{pct}%</span>
           </div>
           <Progress
             percent={pct}
             showInfo={false}
-            strokeColor={{ "0%": "#7c3aed", "100%": "#d946ef" }}
-            trailColor="#1a1025"
+            strokeColor={{ "0%": "#7c3aed", "100%": "#6366f1" }}
+            trailColor="#0d1221"
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-3 mb-4">
+        <div className="grid grid-cols-2 gap-3 mb-5">
           {evaluationResult.criteria.map((criterion, idx) => (
-            <div key={idx} className="bg-black/60 border border-purple-900/50 rounded-lg p-3">
-              <div className="flex justify-between items-center">
-                <span className="font-medium text-purple-300 capitalize">{criterion.category}</span>
+            <div key={idx} className="bg-[#0d1221] border border-[#1e2943] rounded-xl p-3">
+              <div className="flex justify-between items-center mb-1">
+                <span className="font-medium text-slate-200 capitalize text-sm">{criterion.category}</span>
                 <Tag color={criterion.score / criterion.maxScore > 0.7 ? "purple" : "magenta"}>
                   {criterion.score}/{criterion.maxScore}
                 </Tag>
               </div>
-              <p className="text-xs text-purple-500/80 mt-1">{criterion.feedback}</p>
+              <p className="text-xs text-slate-500">{criterion.feedback}</p>
             </div>
           ))}
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 gap-4 mb-4">
           <div>
-            <h4 className="text-sm font-semibold text-purple-300 mb-2">
-              <CheckCircleOutlined className="mr-1 text-purple-400" /> Strengths
+            <h4 className="text-sm font-semibold text-emerald-400 mb-2 flex items-center gap-1.5">
+              <CheckCircleOutlined /> Strengths
             </h4>
-            <ul className="text-sm text-purple-400/90 space-y-1">
+            <ul className="text-sm text-slate-400 space-y-1.5">
               {evaluationResult.strengths.map((s, i) => (
                 <li key={i} className="flex items-start gap-2">
-                  <span className="text-purple-400">✓</span>
-                  {s}
+                  <span className="text-emerald-500 mt-0.5">✓</span>
+                  <span>{s}</span>
                 </li>
               ))}
             </ul>
           </div>
           <div>
-            <h4 className="text-sm font-semibold text-fuchsia-300 mb-2">
-              <CloseCircleOutlined className="mr-1 text-fuchsia-400" /> Areas to improve
+            <h4 className="text-sm font-semibold text-rose-400 mb-2 flex items-center gap-1.5">
+              <CloseCircleOutlined /> Areas to improve
             </h4>
-            <ul className="text-sm text-purple-400/90 space-y-1">
+            <ul className="text-sm text-slate-400 space-y-1.5">
               {evaluationResult.weaknesses.map((w, i) => (
                 <li key={i} className="flex items-start gap-2">
-                  <span className="text-fuchsia-400">✗</span>
-                  {w}
+                  <span className="text-rose-500 mt-0.5">✗</span>
+                  <span>{w}</span>
                 </li>
               ))}
             </ul>
           </div>
         </div>
 
-        <div className="mt-4 p-3 bg-purple-950/40 rounded-lg border border-purple-900/50">
-          <p className="text-sm text-purple-300">{evaluationResult.summary}</p>
+        <div className="p-4 bg-[#0d1221] border border-[#1e2943] rounded-xl mb-4">
+          <p className="text-sm text-slate-300">{evaluationResult.summary}</p>
         </div>
 
         {evaluationResult.recommendations.length > 0 && (
-          <div className="mt-3">
-            <h4 className="text-sm font-semibold text-purple-300 mb-1">
-              <BulbOutlined className="mr-1" /> Recommendations
+          <div>
+            <h4 className="text-sm font-semibold text-slate-200 mb-2 flex items-center gap-1.5">
+              <BulbOutlined className="text-amber-400" /> Recommendations
             </h4>
-            <ul className="text-sm text-purple-400/90 space-y-1">
+            <ul className="text-sm text-slate-400 space-y-1.5">
               {evaluationResult.recommendations.map((r, i) => (
                 <li key={i} className="flex items-start gap-2">
-                  <span className="text-purple-500">→</span>
-                  {r}
+                  <span className="text-violet-500 mt-0.5">→</span>
+                  <span>{r}</span>
                 </li>
               ))}
             </ul>
@@ -809,53 +962,111 @@ export const AIInterviewEvaluation = () => {
     );
   };
 
-  // ===== RENDER RECORDING INDICATOR =====
-  const renderRecordingIndicator = () => {
-    if (!isRecording) return null;
+  // ===== START-INTERVIEW MIC BUTTON (shown right after the welcome message) =====
+  const renderStartInterviewMic = () => {
+    if (phase !== "ready") return null;
 
     return (
-      <div className="flex items-center gap-3 px-4 py-3 bg-red-950/30 border border-red-800/40 rounded-xl">
-        <span className="relative flex h-3 w-3">
-          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
-          <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500" />
-        </span>
-        <span className="text-red-300 text-sm font-medium">Recording your answer...</span>
-        <span className="text-red-400/70 text-xs ml-auto">
-          {timeRemaining !== null && (
-            <>{Math.floor(timeRemaining / 60)}:{String(timeRemaining % 60).padStart(2, "0")} remaining</>
+      <div className="flex flex-col items-center gap-4 py-8">
+        <button
+          onClick={handleBeginInterviewClick}
+          className="relative group cursor-pointer bg-transparent border-0"
+        >
+          <span className="absolute inset-0 rounded-full bg-violet-500/20 group-hover:scale-125 transition-all duration-500" />
+          <div className="relative w-20 h-20 rounded-full flex items-center justify-center transition-all duration-300 shadow-lg bg-linear-to-br from-violet-600 to-indigo-600 shadow-violet-500/30 group-hover:shadow-violet-500/50 group-hover:scale-105">
+            <AudioOutlined className="text-white text-3xl" />
+          </div>
+        </button>
+
+        <div className="text-center">
+          <p className="text-slate-300 text-sm font-medium mb-1">Click the microphone below to start your interview</p>
+          <p className="text-slate-500 text-xs">We'll count you in, then ask the first question</p>
+        </div>
+      </div>
+    );
+  };
+
+  // ===== MICROPHONE BUTTON (used to answer each question) =====
+  const renderMicButton = () => {
+    if (phase !== "question" && phase !== "recording") return null;
+
+    return (
+      <div className="flex flex-col items-center gap-4 py-8">
+        <div className="flex items-center gap-5">
+          <button
+            onClick={handleMicClick}
+            className="relative group cursor-pointer bg-transparent border-0"
+          >
+            <span className={`absolute inset-0 rounded-full transition-all duration-500 ${
+              isRecording
+                ? "bg-rose-500/20 animate-ping scale-150"
+                : "bg-violet-500/20 group-hover:scale-125"
+            }`} />
+            <div className={`relative w-20 h-20 rounded-full flex items-center justify-center transition-all duration-300 shadow-lg ${
+              isRecording
+                ? "bg-linear-to-br from-rose-600 to-rose-500 shadow-rose-500/40 scale-110"
+                : "bg-linear-to-br from-violet-600 to-indigo-600 shadow-violet-500/30 group-hover:shadow-violet-500/50 group-hover:scale-105"
+            }`}>
+              {isRecording ? (
+                <AudioFilled className="text-white text-3xl animate-pulse" />
+              ) : (
+                <AudioOutlined className="text-white text-3xl" />
+              )}
+            </div>
+          </button>
+
+          {/* Explicit stop control, only shown while actively recording */}
+          {isRecording && (
+            <button
+              onClick={handleStopClick}
+              className="group cursor-pointer bg-transparent border-0 flex flex-col items-center gap-1.5"
+              aria-label="Stop recording"
+            >
+              <div className="w-12 h-12 rounded-full bg-[#141928] border border-[#2a3654] flex items-center justify-center shadow-lg group-hover:border-rose-500/50 group-hover:bg-[#1a2033] transition-all duration-200">
+                <span className="w-3.5 h-3.5 rounded-[3px] bg-rose-500 group-hover:bg-rose-400 transition-colors" />
+              </div>
+              <span className="text-[11px] text-slate-500 group-hover:text-rose-400 transition-colors">Stop</span>
+            </button>
           )}
-        </span>
+        </div>
+
+        <div className="text-center">
+          {isRecording ? (
+            <div className="flex items-center gap-3">
+              <span className="relative flex h-3 w-3">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-rose-500" />
+              </span>
+              <span className="text-rose-400 text-sm font-medium">Recording your answer...</span>
+              <span className="text-rose-400/70 text-xs font-mono">
+                {recordingDuration}s
+              </span>
+            </div>
+          ) : (
+            <div>
+              <p className="text-slate-300 text-sm font-medium mb-1">Click the microphone to answer</p>
+              <p className="text-slate-500 text-xs">Speak freely — click Stop when you're done</p>
+            </div>
+          )}
+        </div>
+
+        {/* Live waveform driven by the microphone's actual input level */}
+        {isRecording && (
+          <canvas
+            ref={waveformCanvasRef}
+            width={320}
+            height={64}
+            className="w-full max-w-[320px] h-16"
+          />
+        )}
       </div>
     );
   };
 
   // ===== MAIN RENDER =====
   return (
-    <ConfigProvider
-      theme={{
-        algorithm: antdTheme.darkAlgorithm,
-        token: {
-          colorPrimary: "#a855f7",
-          colorBgBase: "#000000",
-          colorBgContainer: "#000000",
-          colorTextBase: "#d8b4fe",
-          colorBorder: "#3b0764",
-          borderRadius: 8,
-        },
-      }}
-    >
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap');
-        .custom-dark-select .ant-select-selector {
-          background-color: #000 !important;
-          border: none !important;
-          border-bottom: 1px solid #3b0764 !important;
-          border-radius: 0 !important;
-          color: #d8b4fe !important;
-          padding-left: 0 !important;
-        }
-        .custom-dark-select .ant-select-arrow { color: #7e22ce; }
-
+    <>
+     <style>{`
         @keyframes countdown-pulse {
           0% { transform: scale(1); opacity: 1; }
           50% { transform: scale(1.15); opacity: 0.8; }
@@ -864,61 +1075,65 @@ export const AIInterviewEvaluation = () => {
         .countdown-number {
           animation: countdown-pulse 1s ease-in-out;
         }
+       
+        .ant-tag {
+          margin-inline-end: 0 !important;
+        }
       `}</style>
 
-      <div className="w-full h-full bg-[#0d1221] p-0!" style={{ fontFamily: "'Inter', sans-serif" }}>
-        <div className="w-full max-w-full h-full flex flex-col">
-          {/* Header */}
-          <div className="bg-black border-b border-purple-950 px-6 py-3 shrink-0">
-            <div className="w-full mx-auto flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="relative w-9 h-9 shrink-0 flex items-center justify-center">
-                  <span className="absolute inset-0 rounded-full bg-purple-600/25 blur-md" />
-                  <div className="relative w-9 h-9 rounded-full border border-purple-700/60 bg-black flex items-center justify-center">
-                    <RobotOutlined className="text-purple-400" />
-                  </div>
-                </div>
-                <div>
-                  <h1 className="text-base font-semibold text-purple-200" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
-                    AI Interview Evaluator
-                  </h1>
-                  <div className="flex items-center gap-3">
-                    <p className="text-xs text-purple-600">
-                      {session ? `Question ${currentQuestionIndex + 1}/${totalQuestions}` : "Ready"}
-                    </p>
-                    {timeRemaining !== null && timeRemaining > 0 && !isRecording && (
-                      <span className="flex items-center gap-1 text-xs text-fuchsia-400">
-                        <ClockCircleOutlined />
-                        {Math.floor(timeRemaining / 60)}:{String(timeRemaining % 60).padStart(2, "0")}
-                      </span>
-                    )}
-                    {isRecording && (
-                      <span className="flex items-center gap-1 text-xs text-red-400">
-                        <span className="animate-pulse">●</span> Recording
-                      </span>
-                    )}
-                    {session && (
-                      <Tag color={session.status === "completed" ? "purple" : "geekblue"}>
-                        {session.status === "completed" ? "Completed" : "In progress"}
-                      </Tag>
-                    )}
-                  </div>
+
+
+
+
+      <div className="w-full h-full bg-[#0d1221]" style={{ fontFamily: "'Inter', sans-serif" }}>
+      <div className="w-full max-w-full h-full flex flex-col">
+        {/* Header */}
+        <div className="bg-[#0d1221] border-b border-[#1e2943] px-6 py-3 shrink-0">
+          <div className="w-full mx-auto flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="relative w-9 h-9 shrink-0">
+                <span className="absolute inset-0 rounded-xl bg-violet-600/25 blur-md" />
+                <div className="relative w-9 h-9 rounded-xl bg-linear-to-br from-violet-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-violet-500/20">
+                  <RobotOutlined className="text-white text-sm" />
                 </div>
               </div>
-              {session && session.status === "completed" && !showEvaluation && (
-                <Button
-                  type="primary"
-                  size="small"
-                  onClick={() => setShowEvaluation(true)}
-                  className="bg-purple-700! border-0!"
-                >
-                  View evaluation
-                </Button>
-              )}
+              <div>
+                <h1 className="text-white font-bold text-sm tracking-tight">
+                  AI Interview Evaluator
+                </h1>
+                <div className="flex items-center gap-3">
+                  <p className="text-slate-500 text-xs">
+                    {session ? `Question ${currentQuestionIndex + 1}/${totalQuestions}` : "Ready"}
+                  </p>
+                  {isRecording && (
+                    <span className="flex items-center gap-1 text-xs text-rose-400">
+                      <span className="animate-pulse">●</span> Recording
+                    </span>
+                  )}
+                  {session && (
+                    <Tag color={session.status === "completed" ? "purple" : "geekblue"} className="!text-xs !px-2 !py-0 !border-0">
+                      {session.status === "completed" ? "Completed" : "In progress"}
+                    </Tag>
+                  )}
+                </div>
+              </div>
             </div>
+            {session && session.status === "completed" && !showEvaluation && (
+              <Button
+                type="primary"
+                size="small"
+                onClick={() => setShowEvaluation(true)}
+                className="!bg-linear-to-r !from-violet-600 !to-indigo-600 !border-0 !rounded-lg !shadow-lg !shadow-violet-500/20"
+              >
+                View evaluation
+              </Button>
+            )}
           </div>
+        </div>
 
-          {/* Main Content */}
+        {/* Main Content */}
+        <div className="flex-1 flex flex-col overflow-hidden">
+          {/* Messages area — scrollable */}
           <div className="flex-1 overflow-y-auto px-4 py-4 relative">
             {!session ? (
               <SetupScreen onStart={initializeInterview} />
@@ -927,10 +1142,10 @@ export const AIInterviewEvaluation = () => {
                 {/* Countdown Overlay */}
                 {showCountdown && (
                   <div className="flex flex-col items-center justify-center py-16">
-                    <div className="text-purple-400 text-lg mb-4 font-light tracking-widest uppercase">
+                    <div className="text-slate-400 text-sm font-medium tracking-widest uppercase mb-4">
                       Your interview starts in
                     </div>
-                    <div className="countdown-number text-8xl font-bold text-transparent bg-clip-text bg-gradient-to-br from-purple-400 to-fuchsia-500">
+                    <div className="text-8xl font-bold text-transparent bg-clip-text bg-linear-to-br from-violet-400 to-indigo-500 countdown-number">
                       {countdownValue}
                     </div>
                   </div>
@@ -942,49 +1157,90 @@ export const AIInterviewEvaluation = () => {
                     {messages.map((msg) => (
                       <div key={msg.id} className={`flex ${msg.type === "candidate" ? "justify-end" : "justify-start"}`}>
                         <div
-                          className={`max-w-[80%] rounded-2xl px-4 py-3 border ${
+                          className={`max-w-[80%] rounded-2xl px-5 py-4 border ${
                             msg.type === "candidate"
-                              ? "bg-purple-800/40 border-purple-600/50 text-purple-100"
+                              ? "bg-violet-500/10 border-violet-500/20"
                               : msg.type === "system"
-                              ? "bg-fuchsia-950/20 border-fuchsia-800/40"
-                              : "bg-[#0a0510] border-purple-900/50"
+                              ? "bg-[#141928] border-[#1e2943]"
+                              : "bg-[#141928] border-[#1e2943]"
                           }`}
                         >
                           <div className="flex items-start gap-3">
                             {msg.type === "interviewer" && (
-                              <Avatar icon={<RobotOutlined />} className="bg-purple-800! mt-0.5 shrink-0" size="small" />
+                              <Avatar icon={<RobotOutlined />} className="!bg-linear-to-br !from-violet-500 !to-indigo-600 !border-0 !shrink-0" size="small" />
                             )}
                             {msg.type === "candidate" && (
-                              <Avatar icon={<UserOutlined />} className="bg-fuchsia-800! mt-0.5 shrink-0" size="small" />
+                              <Avatar icon={<UserOutlined />} className="!bg-linear-to-br !from-violet-500 !to-indigo-600 !border-0 !shrink-0" size="small" />
                             )}
                             {msg.type === "system" && (
-                              <div className="w-6 h-6 bg-fuchsia-900/40 rounded-full flex items-center justify-center mt-0.5 shrink-0">
-                                <RobotOutlined className="text-fuchsia-400 text-sm" />
+                              <div className="w-7 h-7 rounded-xl bg-linear-to-br from-violet-500 to-indigo-600 flex items-center justify-center shrink-0">
+                                <RobotOutlined className="text-white text-sm" />
                               </div>
                             )}
                             <div className="min-w-0 flex-1">
-                              <div className="whitespace-pre-wrap text-sm leading-relaxed text-purple-300">
-                                {formatMessageContent(msg.content)}
+                              {/* Bold title */}
+                              <div className="text-white font-semibold text-sm mb-1">
+                                {msg.content}
                               </div>
 
+                              {/* Question details */}
                               {msg.question && (
-                                <div className="mt-2 flex flex-wrap gap-2">
-                                  <Tag color="purple" className="text-xs capitalize">
-                                    {getCategoryIcon(msg.question.category)} {msg.question.category.replace("_", " ")}
-                                  </Tag>
-                                  <Tag color={getDifficultyColor(msg.question.difficulty)} className="text-xs">
-                                    {msg.question.difficulty}
-                                  </Tag>
-                                  {msg.question.time_limit_seconds && (
-                                    <Tag color="magenta" className="text-xs">
-                                      <ClockCircleOutlined /> {msg.question.time_limit_seconds}s
+                                <div className="mt-0.5 space-y-2">
+                                  <p className="text-slate-300 text-sm leading-relaxed">
+                                    {msg.question.question}
+                                  </p>
+                                  <div className="flex flex-wrap gap-2">
+                                    <Tag color="purple" className="!text-xs !px-2 !py-0.5 !border-0 capitalize">
+                                      {getCategoryIcon(msg.question.category)} {msg.question.category.replace("_", " ")}
                                     </Tag>
+                                    <Tag color={getDifficultyColor(msg.question.difficulty)} className="!text-xs !px-2 !py-0.5 !border-0">
+                                      {msg.question.difficulty}
+                                    </Tag>
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Per-question evaluation card */}
+                              {msg.evaluation && (
+                                <div className="mt-3 p-3 bg-[#0d1221] border border-[#1e2943] rounded-xl">
+                                  <div className="flex items-center justify-between mb-2">
+                                    <span className="text-xs text-slate-400">Score</span>
+                                    <Tag color="purple" className="!text-xs !px-2 !py-0.5 !border-0 !font-semibold">
+                                      {msg.evaluation.overallScore}/{msg.evaluation.maxScore}
+                                    </Tag>
+                                  </div>
+                                  <p className="text-xs text-slate-400 mb-2">{msg.evaluation.summary}</p>
+                                  {msg.evaluation.strengths.length > 0 && (
+                                    <div className="mb-1.5">
+                                      <span className="text-emerald-400 text-xs font-medium">Strengths</span>
+                                      <ul className="text-xs text-slate-400 mt-1 space-y-0.5">
+                                        {msg.evaluation.strengths.map((s, i) => (
+                                          <li key={i} className="flex items-start gap-1.5">
+                                            <span className="text-emerald-500 mt-0.5">✓</span>
+                                            <span>{s}</span>
+                                          </li>
+                                        ))}
+                                      </ul>
+                                    </div>
+                                  )}
+                                  {msg.evaluation.weaknesses.length > 0 && (
+                                    <div>
+                                      <span className="text-rose-400 text-xs font-medium">Areas to improve</span>
+                                      <ul className="text-xs text-slate-400 mt-1 space-y-0.5">
+                                        {msg.evaluation.weaknesses.map((w, i) => (
+                                          <li key={i} className="flex items-start gap-1.5">
+                                            <span className="text-rose-500 mt-0.5">✗</span>
+                                            <span>{w}</span>
+                                          </li>
+                                        ))}
+                                      </ul>
+                                    </div>
                                   )}
                                 </div>
                               )}
 
                               {msg.timestamp && (
-                                <div className="text-xs mt-1 text-purple-700">{dayjs(msg.timestamp).format("HH:mm")}</div>
+                                <div className="text-xs mt-2 text-slate-600">{dayjs(msg.timestamp).format("HH:mm")}</div>
                               )}
                             </div>
                           </div>
@@ -992,12 +1248,8 @@ export const AIInterviewEvaluation = () => {
                       </div>
                     ))}
 
-                    {/* Recording indicator shown after question message */}
-                    {isRecording && phase === "recording" && (
-                      <div className="flex justify-start">
-                        <div className="max-w-[80%] w-full">{renderRecordingIndicator()}</div>
-                      </div>
-                    )}
+                    {/* Mic button to kick off the interview, shown right after the welcome message */}
+                    {!showCountdown && renderStartInterviewMic()}
 
                     <div ref={messagesEndRef} />
                   </div>
@@ -1008,69 +1260,44 @@ export const AIInterviewEvaluation = () => {
             )}
           </div>
 
-          {/* Audio indicator bar when recording */}
-          {session && session.status !== "completed" && !showCountdown && (
-            <div className="shrink-0 px-4 pb-6 pt-2">
+          {/* Recording Controls — separate section at the bottom */}
+          {session && !showCountdown && !showEvaluation && session.status !== "completed" && (phase === "question" || phase === "recording") && (
+            <div className="shrink-0 border-t border-[#1e2943] bg-[#0d1221] px-4 py-6">
               <div className="w-full md:w-[70%] mx-auto">
-                {isRecording ? (
-                  <div className="flex items-center justify-center gap-3 bg-[#0a0510] rounded-2xl border border-red-900/60 p-4">
-                    <span className="relative flex h-4 w-4">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
-                      <span className="relative inline-flex rounded-full h-4 w-4 bg-red-500" />
-                    </span>
-                    <span className="text-red-300 font-medium">Recording audio response...</span>
-                    <div className="flex items-end gap-[3px] h-6 ml-2">
-                      <span className="w-1 bg-red-400 rounded-full animate-bounce" style={{ height: "40%", animationDelay: "0ms" }} />
-                      <span className="w-1 bg-red-400 rounded-full animate-bounce" style={{ height: "70%", animationDelay: "100ms" }} />
-                      <span className="w-1 bg-red-400 rounded-full animate-bounce" style={{ height: "50%", animationDelay: "200ms" }} />
-                      <span className="w-1 bg-red-400 rounded-full animate-bounce" style={{ height: "90%", animationDelay: "300ms" }} />
-                      <span className="w-1 bg-red-400 rounded-full animate-bounce" style={{ height: "30%", animationDelay: "400ms" }} />
-                    </div>
-                    <span className="text-red-400/70 text-sm ml-auto">
-                      {timeRemaining !== null && (
-                        <>{Math.floor(timeRemaining / 60)}:{String(timeRemaining % 60).padStart(2, "0")}</>
-                      )}
-                    </span>
-                  </div>
-                ) : phase === "question" ? (
-                  <div className="flex items-center justify-center gap-2 bg-[#0a0510] rounded-2xl border border-purple-900/60 p-4">
-                    <LoadingOutlined className="text-purple-400 text-lg" />
-                    <span className="text-purple-400 text-sm">Preparing microphone...</span>
-                  </div>
-                ) : phase === "idle" && session.status !== "completed" ? (
-                  <div className="flex items-center justify-center gap-2 bg-[#0a0510] rounded-2xl border border-purple-900/40 p-3">
-                    <span className="text-purple-600 text-sm">Processing response...</span>
-                  </div>
-                ) : null}
-
-                {/* Show audio responses summary when no recording */}
-                {!isRecording && Object.keys(audioResponses).length > 0 && (
-                  <div className="mt-2 flex justify-center gap-2">
-                    <span className="text-xs text-purple-600">
-                      {Object.keys(audioResponses).length} audio response(s) recorded
-                    </span>
-                    {Object.entries(audioResponses).map(([qId, blob]) => (
-                      <Tag key={qId} color="purple" className="text-xs cursor-pointer"
-                        onClick={() => {
-                          const url = URL.createObjectURL(blob);
-                          const a = document.createElement("a");
-                          a.href = url;
-                          a.download = `response-${qId}.wav`;
-                          a.click();
-                          URL.revokeObjectURL(url);
-                        }}
-                      >
-                        Download Q{currentQuestionIndex + 1}.wav
-                      </Tag>
-                    ))}
-                  </div>
-                )}
+                {renderMicButton()}
               </div>
             </div>
           )}
         </div>
+
+        {/* Audio download tags */}
+        {session && session.status === "completed" && Object.keys(audioResponses).length > 0 && (
+          <div className="shrink-0 px-4 pb-6 pt-2">
+            <div className="w-full md:w-[70%] mx-auto flex flex-wrap justify-center gap-2">
+              <span className="text-slate-500 text-xs mr-1 self-center">
+                {Object.keys(audioResponses).length} audio response(s) recorded —
+              </span>
+              {Object.entries(audioResponses).map(([qId], idx) => (
+                <Tag key={qId} color="purple" className="!text-xs !px-2 !py-0.5 !border-0 cursor-pointer"
+                  onClick={() => {
+                    const blob = audioResponses[qId];
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = `response-Q${idx + 1}.wav`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  }}
+                >
+                  <SoundOutlined /> Download Q{idx + 1}
+                </Tag>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
-    </ConfigProvider>
+    </div>
+    </>
   );
 };
 

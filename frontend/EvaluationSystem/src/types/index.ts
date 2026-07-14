@@ -50,5 +50,5 @@ export interface RegisterData {
   name: string;
   email: string;
   password: string;
-  role: 'candidate' | 'interviewer';
+  role: 'user' | 'admin';
 }

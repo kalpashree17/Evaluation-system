@@ -1,3 +1,5 @@
+// 
+
 import { useState, useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { Header } from './components/header';
@@ -8,26 +10,57 @@ import Register from './auth/register';
 // import Unauthorized from './components/Unauthorized';
 // import EvaluationPage from './pages/EvaluationPage';
 
+type Role = 'admin' | 'user';
+
+// ── Dev bypass ────────────────────────────────────────────────────────────────
+// Set VITE_BYPASS_AUTH=true in .env to skip login entirely during development.
+// This must be removed (or set to false) before shipping to production.
+const BYPASS_AUTH = import.meta.env.VITE_BYPASS_AUTH === 'true';
+const BYPASS_ROLE: Role = 'user';
+
+if (BYPASS_AUTH) {
+  // Seed localStorage so downstream components (Navbar, etc.) behave as if
+  // a real user is logged in, without ever hitting /auth/login.
+  if (!localStorage.getItem('token')) {
+    localStorage.setItem('token', 'dev-bypass-token');
+    localStorage.setItem('role', BYPASS_ROLE);
+    localStorage.setItem(
+      'user',
+      JSON.stringify({ id: 0, name: 'Dev User', email: 'dev@local', role: BYPASS_ROLE })
+    );
+  }
+}
+
 // ── Dashboard Layout (unified for all roles) ────────────────────────────────
 
 const DashboardLayout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [module, setModule] = useState('overview');
-  const { user } = useAuth();
 
-  // Set default module based on role
+  // Read the role directly from localStorage (set at login/register time,
+  // or seeded above when BYPASS_AUTH is on)
+  const [role, setRole] = useState<Role | null>(
+    () => localStorage.getItem('role') as Role | null
+  );
+
   useEffect(() => {
-    const defaultModule = getDefaultModule(user?.role);
-    setModule(defaultModule);
-  }, [user?.role]);
+    const handleStorage = () => {
+      setRole(localStorage.getItem('role') as Role | null);
+    };
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, []);
 
-  // Get nav items based on user role
-  const navItems = getNavItemsForRole(user?.role);
+  useEffect(() => {
+    const defaultModule = getDefaultModule(role ?? undefined);
+    setModule(defaultModule);
+  }, [role]);
+
+  const navItems = getNavItemsForRole(role ?? undefined);
   const activeNav = navItems.find((item) => item.id === module);
   const ActiveModule = activeNav?.component ?? (() => null);
 
-  // Check if user has access to this module
-  const hasAccess = activeNav?.roles?.includes(user?.role as any) ?? true;
+  const hasAccess = activeNav?.roles?.includes(role as any) ?? true;
 
   if (!hasAccess) {
     return <Navigate to="/dashboard" replace />;
@@ -40,7 +73,7 @@ const DashboardLayout = () => {
         module={module}
         setModule={setModule}
         sidebarOpen={sidebarOpen}
-        role={user?.role}
+        role={role}
       />
 
       {/* Right column: topbar + page content */}
@@ -64,6 +97,8 @@ const DashboardLayout = () => {
 // ── Route Guards ──────────────────────────────────────────────────────────────
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
+  if (BYPASS_AUTH) return <>{children}</>;
+
   const { isAuthenticated, isLoading } = useAuth();
 
   if (isLoading) {
@@ -77,13 +112,15 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   return isAuthenticated ? <>{children}</> : <Navigate to="/login" replace />;
 };
 
-const RoleRoute = ({ 
-  children, 
-  allowedRoles 
-}: { 
-  children: React.ReactNode; 
-  allowedRoles: ('admin' | 'interviewer' | 'candidate')[] 
+const RoleRoute = ({
+  children,
+  allowedRoles,
+}: {
+  children: React.ReactNode;
+  allowedRoles: Role[];
 }) => {
+  if (BYPASS_AUTH) return <>{children}</>;
+
   const { isAuthenticated, isLoading, hasRole } = useAuth();
 
   if (isLoading) {
@@ -117,12 +154,17 @@ const App = () => {
       <Route path="/register" element={<Register />} />
       {/* <Route path="/unauthorized" element={<Unauthorized />} /> */}
 
-      {/* Protected dashboard - unified for all roles */}
+      {/* Protected dashboard - redirects to role-specific dashboard */}
       <Route
         path="/dashboard"
         element={
           <ProtectedRoute>
-            <DashboardLayout />
+            {(() => {
+              const role = localStorage.getItem('role');
+              if (role === 'admin') return <Navigate to="/admin/dashboard" replace />;
+              if (role === 'user') return <Navigate to="/user/dashboard" replace />;
+              return <Navigate to="/login" replace />;
+            })()}
           </ProtectedRoute>
         }
       />
@@ -137,46 +179,39 @@ const App = () => {
         }
       />
 
-      {/* Interviewer routes */}
+      {/* User routes */}
       <Route
-        path="/interviewer/*"
+        path="/user/*"
         element={
-          <RoleRoute allowedRoles={['interviewer']}>
+          <RoleRoute allowedRoles={['user']}>
             <DashboardLayout />
           </RoleRoute>
         }
       />
 
-      {/* Candidate routes */}
-      <Route
-        path="/candidate/*"
-        element={
-          <RoleRoute allowedRoles={['candidate']}>
-            <DashboardLayout />
-          </RoleRoute>
-        }
-      />
-
-      {/* Evaluation routes - accessible by admin and interviewer */}
+      {/* Evaluation routes - accessible by admin only */}
       {/* <Route
         path="/evaluation"
         element={
-          <RoleRoute allowedRoles={['admin', 'interviewer']}>
+          <RoleRoute allowedRoles={['admin']}>
             <EvaluationPage />
           </RoleRoute>
         }
       /> */}
 
-      {/* Root path - redirect based on role */}
+      {/* Root path */}
       <Route
         path="/"
         element={
-          <ProtectedRoute>
-            {user?.role === 'admin' && <Navigate to="/admin/dashboard" replace />}
-            {user?.role === 'interviewer' && <Navigate to="/interviewer/dashboard" replace />}
-            {user?.role === 'candidate' && <Navigate to="/candidate/dashboard" replace />}
-            <Navigate to="/login" replace />
-          </ProtectedRoute>
+          BYPASS_AUTH ? (
+            <Navigate to="/user/dashboard" replace />
+          ) : (
+            <ProtectedRoute>
+              {user?.role === 'admin' && <Navigate to="/admin/dashboard" replace />}
+              {user?.role === 'user' && <Navigate to="/user/dashboard" replace />}
+              <Navigate to="/login" replace />
+            </ProtectedRoute>
+          )
         }
       />
 

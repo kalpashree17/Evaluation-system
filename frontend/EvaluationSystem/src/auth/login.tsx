@@ -1,38 +1,66 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { useAuth } from '../context/authContext';
+import api from '../utils/axiosInstance';
+
+interface LoginUser {
+  id: number;
+  name: string;
+  email: string;
+  role: 'admin' | 'user';
+}
+
+interface LoginResponseData {
+  token: string;
+  user: LoginUser;
+}
 
 const Login: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const { login } = useAuth();
+
+  // Holds the full response payload from the backend after a successful login
+  const [authData, setAuthData] = useState<LoginResponseData | null>(null);
+
   const navigate = useNavigate();
 
+  // ── POST /auth/login ─────────────────────────────────────────────────────
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setLoading(true);
 
     try {
-      const response = await login(email, password);
-      const { user } = response;
-      
+      const response = await api.post('/auth/login', {
+        email,
+        password,
+      });
+
+   
+      const { data } = response.data as { success: boolean; data: LoginResponseData };
+
+      // Keep the full response data in state
+      setAuthData(data);
+
+      // Persist token and role separately in localStorage
+      localStorage.setItem('token', data.token);
+      localStorage.setItem('role', data.user.role);
+      localStorage.setItem('user', JSON.stringify(data.user));
+
       // Role-based redirect after successful login
-      switch (user.role) {
+      switch (data.user.role) {
         case 'admin':
           navigate('/admin/dashboard');
           break;
-      
         case 'user':
-          navigate('/candidate/dashboard');
+          navigate('/user/dashboard');
           break;
         default:
           navigate('/dashboard');
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Login failed');
+    } catch (err: any) {
+      setError(err?.response?.data?.message || 'Login failed');
     } finally {
       setLoading(false);
     }
@@ -111,34 +139,6 @@ const Login: React.FC = () => {
             <Link to="/register" className="text-violet-400 hover:text-violet-300 font-medium">
               Create one
             </Link>
-          </div>
-
-          {/* Demo credentials */}
-          <div className="mt-6 p-4 bg-[#0f1623] border border-[#1e2943] rounded-xl">
-            <p className="text-slate-400 text-xs mb-2 font-medium">🔑 Demo Credentials:</p>
-            <div className="space-y-1 text-xs">
-              <div className="flex items-center justify-between text-slate-300">
-                <span className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-violet-500"></span>
-                  Admin
-                </span>
-                <code className="text-slate-400">admin@interviewiq.com / admin123</code>
-              </div>
-              <div className="flex items-center justify-between text-slate-300">
-                <span className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-blue-500"></span>
-                  Interviewer
-                </span>
-                <code className="text-slate-400">interviewer@interviewiq.com / interviewer123</code>
-              </div>
-              <div className="flex items-center justify-between text-slate-300">
-                <span className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-green-500"></span>
-                  Candidate
-                </span>
-                <code className="text-slate-400">candidate@interviewiq.com / candidate123</code>
-              </div>
-            </div>
           </div>
         </div>
       </div>
