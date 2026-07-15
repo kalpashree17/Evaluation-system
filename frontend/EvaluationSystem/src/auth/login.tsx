@@ -1,18 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import api from '../utils/axiosInstance';
-
-interface LoginUser {
-  id: number;
-  name: string;
-  email: string;
-  role: 'admin' | 'user';
-}
-
-interface LoginResponseData {
-  token: string;
-  user: LoginUser;
-}
+import { useAuth } from '../context/authContext';
 
 const Login: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -20,10 +8,8 @@ const Login: React.FC = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Holds the full response payload from the backend after a successful login
-  const [authData, setAuthData] = useState<LoginResponseData | null>(null);
-
   const navigate = useNavigate();
+  const { login } = useAuth();
 
   // ── POST /auth/login ─────────────────────────────────────────────────────
   const handleSubmit = async (e: React.FormEvent) => {
@@ -32,24 +18,10 @@ const Login: React.FC = () => {
     setLoading(true);
 
     try {
-      const response = await api.post('/auth/login', {
-        email,
-        password,
-      });
-
-   
-      const { data } = response.data as { success: boolean; data: LoginResponseData };
-
-      // Keep the full response data in state
-      setAuthData(data);
-
-      // Persist token and role separately in localStorage
-      localStorage.setItem('token', data.token);
-      localStorage.setItem('role', data.user.role);
-      localStorage.setItem('user', JSON.stringify(data.user));
+      const { user } = await login(email, password);
 
       // Role-based redirect after successful login
-      switch (data.user.role) {
+      switch (user.role) {
         case 'admin':
           navigate('/admin/dashboard');
           break;

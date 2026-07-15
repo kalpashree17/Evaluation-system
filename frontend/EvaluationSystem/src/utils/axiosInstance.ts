@@ -9,7 +9,6 @@ const api = axios.create({
   },
 });
 
-console.log("API Base URL:", import.meta.env.VITE_API_BASE_URL);
 // ── Request interceptor: attach auth token ──────────────────────────────────
 api.interceptors.request.use(
   (config:any) => {
@@ -29,6 +28,7 @@ api.interceptors.response.use(
     if (error.response?.status === 401) {
       // token expired/invalid — clear session and redirect to login
       localStorage.removeItem('token');
+      localStorage.removeItem('role');
       localStorage.removeItem('user');
       window.location.href = '/login';
     }

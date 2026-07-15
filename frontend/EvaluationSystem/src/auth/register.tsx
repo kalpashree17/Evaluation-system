@@ -85,7 +85,7 @@ const Register: React.FC = () => {
 
     setLoading(true);
     try {
-      const response = await api.post('/auth/register', {
+      const response = await api.post('/api/auth/register', {
         name: formData.name,
         email: formData.email,
         password: formData.password,
@@ -94,10 +94,6 @@ const Register: React.FC = () => {
       });
 
    
-      const { accessToken, refreshToken } = response?.data ?? {};
-      if (accessToken) localStorage.setItem('accessToken', accessToken);
-      if (refreshToken) localStorage.setItem('refreshToken', refreshToken);
-
       navigate('/login', { state: { message: 'Registration successful! Please sign in.' } });
     } catch (err: any) {
       setError(err?.response?.data?.message || 'Registration failed');
