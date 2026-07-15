@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import type { User, AuthState } from '../types/index';
+import api from '../utils/axiosInstance';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -26,36 +27,6 @@ interface AuthContextType extends AuthState {
   isUser: () => boolean;
 }
 
-// ── Mock data ────────────────────────────────────────────────────────────────
-
-interface MockUser {
-  id: string;
-  name: string;
-  email: string;
-  password: string;
-  role: UserRole;
-  createdAt?: string;
-}
-
-const MOCK_USERS: MockUser[] = [
-  {
-    id: '1',
-    name: 'Admin User',
-    email: 'admin@interviewiq.com',
-    password: 'admin123',
-    role: 'admin',
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: '2',
-    name: 'John Doe',
-    email: 'user@interviewiq.com',
-    password: 'user1234',
-    role: 'user',
-    createdAt: new Date().toISOString(),
-  },
-];
-
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 /**
@@ -71,17 +42,12 @@ function safeParse<T>(value: string | null): T | null {
   }
 }
 
-function generateToken(): string {
-  return `mock-jwt-token-${Date.now()}`;
-}
-
 // ── Context ──────────────────────────────────────────────────────────────────
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [state, setState] = useState<AuthState>(() => {
-    // Initialise synchronously from localStorage to avoid isLoading flicker
     const token = localStorage.getItem('token');
     const user = safeParse<User>(localStorage.getItem('user'));
 
@@ -91,105 +57,50 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     return { user: null, token: null, isAuthenticated: false, isLoading: false };
   });
 
-  // Keep localStorage in sync whenever auth state changes
   useEffect(() => {
     if (state.isAuthenticated && state.user && state.token) {
       localStorage.setItem('token', state.token);
+      localStorage.setItem('role', state.user.role);
       localStorage.setItem('user', JSON.stringify(state.user));
     }
   }, [state.isAuthenticated, state.user, state.token]);
 
   // ── login ──────────────────────────────────────────────────────────────────
 
-  const login = (email: string, password: string): Promise<LoginResponse> => {
-    return new Promise<LoginResponse>((resolve, reject) => {
-      // Simulate API call
-      setTimeout(() => {
-        const match = MOCK_USERS.find(
-          (u) => u.email === email && u.password === password
-        );
+  const login = async (email: string, password: string): Promise<LoginResponse> => {
+    const response = await api.post('/api/auth/login', { email, password });
+    const { data } = response.data as { success: boolean; data: { token: string; user: User } };
 
-        if (!match) {
-          reject(new Error('Invalid email or password'));
-          return;
-        }
-
-        // Exclude password from stored user object
-        const { password: _pw, ...userWithoutPassword } = match;
-        const token = generateToken();
-
-        const userData = userWithoutPassword as User;
-
-        setState({
-          user: userData,
-          token,
-          isAuthenticated: true,
-          isLoading: false,
-        });
-
-        resolve({
-          user: userData,
-          token,
-        });
-      }, 500);
+    setState({
+      user: data.user,
+      token: data.token,
+      isAuthenticated: true,
+      isLoading: false,
     });
+
+    return { user: data.user, token: data.token };
   };
 
   // ── register ───────────────────────────────────────────────────────────────
 
-  const register = (data: RegisterData): Promise<LoginResponse> => {
-    return new Promise<LoginResponse>((resolve, reject) => {
-      setTimeout(() => {
-        const exists = MOCK_USERS.some((u) => u.email === data.email);
-
-        if (exists) {
-          reject(new Error('An account with that email already exists'));
-          return;
-        }
-
-        // In a real app, the role would be assigned by the server
-        // For demo, we'll use the provided role or default to 'user'
-        const role = data.role || 'user';
-
-        const newUser: User = {
-          id: String(MOCK_USERS.length + 1),
-          name: data.name,
-          email: data.email,
-          role: role,
-          createdAt: new Date().toISOString(),
-        };
-
-        // Add to mock users (in real app, this would be stored in DB)
-        MOCK_USERS.push({
-          id: newUser.id,
-          name: newUser.name,
-          email: newUser.email,
-          password: data.password,
-          role: newUser.role,
-          createdAt: newUser.createdAt,
-        });
-
-        const token = generateToken();
-
-        setState({
-          user: newUser,
-          token,
-          isAuthenticated: true,
-          isLoading: false,
-        });
-
-        resolve({
-          user: newUser,
-          token,
-        });
-      }, 500);
+  const register = async (data: RegisterData): Promise<LoginResponse> => {
+    const response = await api.post('/api/auth/register', {
+      name: data.name,
+      email: data.email,
+      password: data.password,
+      role: data.role,
     });
+
+    const result = response.data as { success: boolean; data: User };
+
+    return { user: result.data, token: '' };
   };
 
   // ── logout ─────────────────────────────────────────────────────────────────
 
   const logout = () => {
     localStorage.removeItem('token');
+    localStorage.removeItem('role');
     localStorage.removeItem('user');
     setState({
       user: null,
