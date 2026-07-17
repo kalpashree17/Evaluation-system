@@ -1,9 +1,11 @@
 // src/config/seedQuestionBank.js
 import fs from "fs";
 import { parse } from "csv-parse/sync";
-import { AppDataSource } from "./data-source.js";
+
 import { Skill } from "../entities/Skill.schema.js";
 import { QuestionBank } from "../entities/QuestionBank.schema.js";
+import { AppDataSource } from "../config/data-source.js";
+
 
 export const seedQuestionBank = async () => {
   const skillRepo = AppDataSource.getRepository(Skill);

@@ -1,4 +1,4 @@
-import { AppDataSource } from "./data-source.js";
+import { AppDataSource } from "../config/data-source.js";
 import { Skill, SKILL_NAMES } from "../entities/Skill.schema.js";
 
 export const seedSkills = async () => {
