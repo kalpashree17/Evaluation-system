@@ -37,6 +37,9 @@ export const startInterview = async ({ userId, skillId, startingLevel }) => {
     throw new ApiError(404, "No questions available for this skill");
   }
 
+  console.log("userId:", userId);
+console.log("skillId:", skill.id);
+
   const interview = interviewRepository().create({
     user: { id: userId },
     skill: { id: skill.id },

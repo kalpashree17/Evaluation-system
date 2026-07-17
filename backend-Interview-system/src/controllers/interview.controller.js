@@ -7,6 +7,7 @@ import {
 import { ApiError } from "../utils/ApiError.js";
 
 export const createInterview = async (ctx) => {
+   console.log("=== createInterview called ===");
   const { skill_id, starting_level } = ctx.request.body;
 
   if (!skill_id || !starting_level) {
@@ -17,6 +18,9 @@ export const createInterview = async (ctx) => {
   if (!Number.isInteger(skillId)) {
     throw new ApiError(400, "skill_id must be a valid id");
   }
+
+  console.log("ctx.state.user:", ctx.state.user);
+
 
   const result = await startInterview({
     userId: ctx.state.user.id,

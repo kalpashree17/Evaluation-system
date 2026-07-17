@@ -44,6 +44,7 @@ export const submitAnswer = async ({ questionId, userId, audioFilePath }) => {
   }
 
   // Contract A: Backend -> STT/audio-analysis service
+  // Send the audio to Whisper
   const stt = await transcribeAudio(audioFilePath);
 
   // reference_answer/keywords aren't stored in Postgres — read from the same
@@ -52,17 +53,29 @@ export const submitAnswer = async ({ questionId, userId, audioFilePath }) => {
     ? getReferenceData(question.questionBank.id)
     : { referenceAnswer: null, keywords: [] };
 
+    console.log("REFERENCE ANSWER:", referenceAnswer);
+console.log("KEYWORDS SENT TO NLP:", JSON.stringify(keywords, null, 2));
+
   // Contract B: Backend -> friend's NLP scoring service
+  // const nlp = await scoreAnswer({
+  //   transcriptText: stt.transcript_text,
+  //   referenceAnswer,
+  //   keywords,
+  // });
+
   const nlp = await scoreAnswer({
-    transcriptText: stt.transcript_text,
-    referenceAnswer,
-    keywords,
-  });
+  interviewId: interview.id,
+  questionId: question.id,
+  transcriptText: stt.transcript_text,
+  referenceAnswer,
+  keywords,
+  confidenceScore: stt.confidence_score,
+});
 
   const answer = answerRepository().create({
     question: { id: question.id },
     transcriptText: stt.transcript_text,
-    confidenceScore: stt.confidence_score,
+   confidenceScore: stt.confidence_score ?? 0,
     keywordScore: nlp.keyword_score,
     tfidfScore: nlp.tfidf_score,
     semanticScore: nlp.semantic_score,
