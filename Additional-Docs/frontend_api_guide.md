@@ -120,12 +120,12 @@ Request:
 Response — this already includes your first question, no extra call needed:
 ```json
 {
-  "interview_id": "1",
-  "question": {
-    "id": "1",
-    "question_text": "Explain how you'd design a rate limiter.",
-    "difficulty_level": 0.50
-  }
+    "interview_id": "b2c400cf-3745-4c17-86a7-377c4ab8447b",
+    "question": {
+        "id": "27454476-7d62-4a19-8cf7-6f0ea061105c",
+        "question_text": "How do you pass data from a parent component to a child component?",
+        "difficulty_level": 0.2
+    }
 }
 ```
 
