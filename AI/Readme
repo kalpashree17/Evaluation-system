@@ -1,0 +1,18 @@
+
+
+
+  cd .\AI\  
+  python -m venv venv
+  venv\Scripts\activate
+  cd .\whisper\
+  uvicorn speech_to_text:app --reload --port 8000
+
+----------------------------------------------------
+
+ and forrrr running interview bot do:
+ 
+  cd .\AI\  
+  python -m venv venv
+  venv\Scripts\activate
+  cd .\interview-bot-project\
+  uvicorn app.main:app --reload --port 9000

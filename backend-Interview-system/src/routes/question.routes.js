@@ -1,3 +1,5 @@
+//tHIS IS BASICALLAY answers ROUTE (OF HOW THE ANSWER IS SENT TO THE BACKENDDD AFTER QUETSION IS GENENNRATED)
+
 import Router from "@koa/router";
 import { koaBody } from "koa-body";
 import { answerQuestion } from "../controllers/answer.controller.js";
@@ -13,3 +15,5 @@ const parseMultipart = koaBody({
 router.post("/:questionId/answer", authenticate, parseMultipart, answerQuestion);
 
 export default router;
+
+
