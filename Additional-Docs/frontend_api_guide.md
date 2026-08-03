@@ -111,8 +111,8 @@ User has picked any no of  skill + one difficulty band. Send both together:
 Request:
 ```json
 {
-  "skill_id": "2",
-  "starting_level": "mid"
+  "skill_ids": [2,3,4],
+  "starting_level": "easy"
 }
 ```
 `starting_level` is one of `"easy"`, `"mid"`, `"expert"`.
@@ -120,10 +120,10 @@ Request:
 Response — this already includes your first question, no extra call needed:
 ```json
 {
-    "interview_id": "b2c400cf-3745-4c17-86a7-377c4ab8447b",
+    "interview_id": "093b0bc9-0a76-461a-9e6a-a1274fdd8f7d",
     "question": {
-        "id": "27454476-7d62-4a19-8cf7-6f0ea061105c",
-        "question_text": "How do you pass data from a parent component to a child component?",
+        "id": "9484d6ae-a552-43e7-bca8-95b512aec89a",
+        "question_text": "What is binary search and what condition must be true for it to work?",
         "difficulty_level": 0.2
     }
 }
@@ -152,21 +152,30 @@ value: <the recorded blob/file>
 3. Response — this covers both "show the score" and "here's the next question" in one shot:
 ```json
 {
-  "evaluation": {
-    "confidence_score": 0.78,
-    "keyword_score": 0.65,
-    "tfidf_score": 0.58,
-    "semantic_score": 0.81,
-    "final_score": 0.72,
-    "strengths": ["Clear structure", "Used correct terminology"],
-    "weaknesses": ["Missed edge case discussion"],
-    "areas_for_improvement": ["Mention time complexity explicitly"]
-  },
-  "next_question": {
-    "id": "uuid-q2",
-    "question_text": "How would you handle a burst of traffic?",
-    "difficulty_level": 0.60
-  }
+    "evaluation": {
+        "confidence_score": 0.7421,
+        "keyword_score": 0,
+        "tfidf_score": 0,
+        "semantic_score": 0,
+        "final_score": 0.0476,
+        "strengths": [
+            "Attempted the question"
+        ],
+        "weaknesses": [
+            "Missed key concept(s): array, linked list, contiguous memory"
+        ],
+        "areas_for_improvement": [
+            "Review and explicitly mention: array, linked list, contiguous memory",
+            "Try using more of the precise terminology from the topic",
+            "Answer's overall meaning drifted from what was expected — revisit the core concept"
+        ]
+    },
+    "next_question": {
+        "id": "699258cd-da40-4ada-8566-ccd002703e07",
+        "question_text": "What is the difference between a monolithic architecture and a microservices architecture?",
+        "difficulty_level": 0.1,
+        "skill_id": 4
+    }
 }
 ```
 
@@ -175,15 +184,21 @@ value: <the recorded blob/file>
 6. Go back to step 1 with `next_question.id` as the new `:questionId`.
 
 This loop is the whole interview — repeat until you decide to end it (fixed number of
-questions, a timer, or the user quitting).
+questions,or the user quitting).
 
 ---
 
 ## 6. Ending the interview
 
-`PATCH /api/interviews/:id/end` — `:id` is the `interview_id` from step 4. No body needed.
+`POST /api/interviews/:id/end` — `:id` is the `interview_id` from step 4. No body needed.
 
 Call this when the question loop is done.
+
+response:
+{
+    "interview_id": "09c0e602-6e1f-4097-a008-ffa2a59c517e",
+    "status": "completed"
+}
 
 ---
 
@@ -194,20 +209,169 @@ Call this when the question loop is done.
 Response:
 ```json
 {
-  "questions": [
-    {
-      "order_index": 1,
-      "question_text": "Explain how you'd design a rate limiter.",
-      "difficulty_level": 0.50,
-      "transcript_text": "So the way I'd approach this...",
-      "confidence_score": 0.78,
-      "keyword_score": 0.65,
-      "tfidf_score": 0.58,
-      "semantic_score": 0.81,
-      "final_score": 0.72
-    }
-  ]
+    "interview_id": "c9b1131d-24e0-49eb-a2da-835422edcf98",
+    "skills": [
+        {
+            "skill": "React",
+            "final_difficulty_reached": 0.65,
+            "assessed_level": "mid",
+            "average_score_at_that_level": 0.047,
+            "questions_asked": 1,
+            "questions": [
+                {
+                    "order_index": 1,
+                    "question_text": "Explain how React Fiber changed the reconciliation process compared to the old stack reconciler.",
+                    "difficulty_level": 0.85,
+                    "transcript_text": "You can pass the data from parent component to child component using context.",
+                    "final_score": 0.047,
+                    "strengths": [
+                        "Attempted the question"
+                    ],
+                    "weaknesses": [
+                        "Missed key concept(s): React Fiber, incremental rendering, concurrent mode"
+                    ],
+                    "areas_for_improvement": [
+                        "Review and explicitly mention: React Fiber, incremental rendering, concurrent mode",
+                        "Try using more of the precise terminology from the topic",
+                        "Answer's overall meaning drifted from what was expected — revisit the core concept"
+                    ]
+                }
+            ]
+        },
+        {
+            "skill": "System Design",
+            "final_difficulty_reached": 0.65,
+            "assessed_level": "mid",
+            "average_score_at_that_level": 0.0476,
+            "questions_asked": 2,
+            "questions": [
+                {
+                    "order_index": 3,
+                    "question_text": "How would you design a globally distributed database that stays consistent across regions?",
+                    "difficulty_level": 0.85,
+                    "transcript_text": "You can pass the data from parent component to child component using context.",
+                    "final_score": 0.0476,
+                    "strengths": [
+                        "Attempted the question"
+                    ],
+                    "weaknesses": [
+                        "Missed key concept(s): distributed database, multi-region, consensus"
+                    ],
+                    "areas_for_improvement": [
+                        "Review and explicitly mention: distributed database, multi-region, consensus",
+                        "Try using more of the precise terminology from the topic",
+                        "Answer's overall meaning drifted from what was expected — revisit the core concept"
+                    ]
+                },
+                {
+                    "order_index": 6,
+                    "question_text": "How would you design a notification system that supports email, SMS, and push notifications?",
+                    "difficulty_level": 0.6,
+                    "transcript_text": null,
+                    "final_score": null,
+                    "strengths": [],
+                    "weaknesses": [],
+                    "areas_for_improvement": []
+                }
+            ]
+        },
+        {
+            "skill": "SQL",
+            "final_difficulty_reached": 0.65,
+            "assessed_level": "mid",
+            "average_score_at_that_level": 0.0476,
+            "questions_asked": 1,
+            "questions": [
+                {
+                    "order_index": 4,
+                    "question_text": "How would you design a database schema and query strategy to efficiently support full-text search on millions of rows?",
+                    "difficulty_level": 0.85,
+                    "transcript_text": "You can pass the data from parent component to child component using context.",
+                    "final_score": 0.0476,
+                    "strengths": [
+                        "Attempted the question"
+                    ],
+                    "weaknesses": [
+                        "Missed key concept(s): full-text search, GIN index, tsvector"
+                    ],
+                    "areas_for_improvement": [
+                        "Review and explicitly mention: full-text search, GIN index, tsvector",
+                        "Try using more of the precise terminology from the topic",
+                        "Answer's overall meaning drifted from what was expected — revisit the core concept"
+                    ]
+                }
+            ]
+        },
+        {
+            "skill": "Data Structures",
+            "final_difficulty_reached": 0.45,
+            "assessed_level": "mid",
+            "average_score_at_that_level": 0.0476,
+            "questions_asked": 2,
+            "questions": [
+                {
+                    "order_index": 2,
+                    "question_text": "Explain how a trie data structure works and where it's useful.",
+                    "difficulty_level": 0.85,
+                    "transcript_text": "You can pass the data from parent component to child component using context.",
+                    "final_score": 0.0476,
+                    "strengths": [
+                        "Attempted the question"
+                    ],
+                    "weaknesses": [
+                        "Missed key concept(s): trie, prefix tree, autocomplete"
+                    ],
+                    "areas_for_improvement": [
+                        "Review and explicitly mention: trie, prefix tree, autocomplete",
+                        "Try using more of the precise terminology from the topic",
+                        "Answer's overall meaning drifted from what was expected — revisit the core concept"
+                    ]
+                },
+                {
+                    "order_index": 5,
+                    "question_text": "Explain how you would detect a cycle in a linked list.",
+                    "difficulty_level": 0.7,
+                    "transcript_text": "You can pass the data from parent component to child component using context.",
+                    "final_score": 0.0476,
+                    "strengths": [
+                        "Attempted the question"
+                    ],
+                    "weaknesses": [
+                        "Missed key concept(s): cycle detection, Floyd's algorithm, slow pointer"
+                    ],
+                    "areas_for_improvement": [
+                        "Review and explicitly mention: cycle detection, Floyd's algorithm, slow pointer",
+                        "Try using more of the precise terminology from the topic",
+                        "Answer's overall meaning drifted from what was expected — revisit the core concept"
+                    ]
+                }
+            ]
+        }
+    ]
 }
+
+HERE IN FFORENNED I WNAT TO SHOWW.. HAREK QUESTION KOO SCORE. AND HAREK SKILL MA KASTO THEO BHENRA.. AND TEHSMA TYO ORDER INDEX BHNEYYKO..QUESTION KO SEQUENCE LA ORDER INDEX 4 BHENKO. TYO QUETSION 4RYH MA SODHYA THEOO.. ANI TESHMA ESTO STO GARAYO BHENR SABBAI DAEKHNEY LA FONRENNED MAA. HUHUHU
+
+
+
+8. TO GET INTEVIEW KO STATUUSS:
+
+http://localhost:4000/api/interviews/:ID 
+WHERE ID IS INTERVIEW id
+
+RESPOSE: {
+    "interview_id": "c9b1131d-24e0-49eb-a2da-835422edcf98",
+    "skills": [
+        "React",
+        "Data Structures",
+        "System Design",
+        "SQL"
+    ],
+    "starting_level": "expert",
+    "status": "completed",
+    "created_at": "2026-07-23T09:12:34.321Z"
+}
+
 ```
 
 One row per question asked, in order — enough to render a full breakdown/summary page.
@@ -244,3 +408,10 @@ GET /api/interviews/:id/report           -> results screen
 - `difficulty_level` on a question is a float 0.0–1.0, not a label — if you want to show a badge
   like "Easy/Mid/Expert" on screen, bucket it yourself: `< 0.35` easy, `0.35–0.65` mid, `> 0.65`
   expert.
+-------------------------------------
+
+for the end do: 
+
+Submit all 5 answers via POST /api/questions/:questionId/answer (using each next_question.id from the previous response)
+POST /api/interviews/:id/end
+GET /api/interviews/:id/report
