@@ -13,8 +13,8 @@ the auth token from login sent as a header: `Authorization: Bearer <token>`.
 Request:
 ```json
 {
-  "name": "Kalpa",
-  "email": "kalpa@example.com",
+  "name": "Smarika Pokharel",
+  "email": "smarika@example.com",
   "password": "Smarika@123",
   "role": "admin"
 }
@@ -27,8 +27,8 @@ Response:
     "success": true,
     "data": {
         "id": 1,
-        "name": "Kalpa",
-        "email": "kalpa@example.com",
+        "name": "Smarika Pokharel",
+        "email": "smarika@example.com",
         "role": "admin"
     }
 }
@@ -42,7 +42,7 @@ Response:
 
 Request:
 ```json
-{ "email": "kalpa@example.com", "password": "Smarika@123" }
+{ "email": "smarika@example.com", "password": "Smarika@123" }
 ```
 
 Response: same shape as register — `{ user, token }`. Save the token, attach it to every
@@ -51,11 +51,11 @@ request after this.
 {
     "success": true,
     "data": {
-        "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOjEsImVtYWlsIjoia2FscGFAZXhhbXBsZS5jb20iLCJyb2xlIjoiYWRtaW4iLCJpYXQiOjE3ODMyNjEyNDMsImV4cCI6MTc4MzM0NzY0M30.-ORzHbT1XOzKHhPVg7xUn1acfPqUgMAUfRpwML0aJAI",
+        "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOjEsImVtYWlsIjoic21hcmlrYUBleGFtcGxlLmNvbSIsInJvbGUiOiJhZG1pbiIsImlhdCI6MTc4NDE4NTgzOSwiZXhwIjoxNzg0MjcyMjM5fQ.jJvdc8yVn3DOns9UfzWW9VkNsSY_S_8KNSI6Q1PHfR8",
         "user": {
             "id": 1,
-            "name": "Kalpa",
-            "email": "kalpa@example.com",
+            "name": "Smarika Pokharel",
+            "email": "smarika@example.com",
             "role": "admin"
         }
     }
@@ -97,14 +97,14 @@ Response:
 }
 ```
 
-Render these as your ~20 select buttons. Alongside that, show your easy/mid/expert difficulty
+Render these as your ~5 select buttons. Alongside that, show your easy/mid/expert difficulty
 picker — that one's just static UI, no API call needed for it.
 
 ---
 
 ## 4. "Start Interview" button
 
-User has picked one skill + one difficulty band. Send both together:
+User has picked any no of  skill + one difficulty band. Send both together:
 
 `POST /api/interviews`
 
@@ -120,12 +120,12 @@ Request:
 Response — this already includes your first question, no extra call needed:
 ```json
 {
-  "interview_id": "1",
-  "question": {
-    "id": "1",
-    "question_text": "Explain how you'd design a rate limiter.",
-    "difficulty_level": 0.50
-  }
+    "interview_id": "b2c400cf-3745-4c17-86a7-377c4ab8447b",
+    "question": {
+        "id": "27454476-7d62-4a19-8cf7-6f0ea061105c",
+        "question_text": "How do you pass data from a parent component to a child component?",
+        "difficulty_level": 0.2
+    }
 }
 ```
 

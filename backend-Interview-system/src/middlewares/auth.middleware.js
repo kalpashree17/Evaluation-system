@@ -12,6 +12,14 @@ export const authenticate = async (ctx, next) => {
 
   try {
     const payload = jwt.verify(token, process.env.JWT_SECRET || "dev_secret");
+
+//   this jwt verify will returns payload:
+// {
+//   sub:15,
+//   email:"smarika@gmail.com",
+//   role:"admin"
+// }
+
     ctx.state.user = { id: payload.sub, email: payload.email, role: payload.role };
   } catch (err) {
     throw new ApiError(401, "Invalid or expired token");

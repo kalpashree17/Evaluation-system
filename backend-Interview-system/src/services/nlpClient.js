@@ -1,6 +1,11 @@
-// Contract B — Backend -> friend's NLP scoring service.
-// NLP_SERVICE_URL isn't set up yet, so this returns a stub until that service exists.
-export const scoreAnswer = async ({ transcriptText, referenceAnswer, keywords }) => {
+export const scoreAnswer = async ({
+  interviewId,
+  questionId,
+  transcriptText,
+  referenceAnswer,
+  keywords,
+  confidenceScore,
+}) => {
   if (!process.env.NLP_SERVICE_URL) {
     return {
       keyword_score: 0.5,
@@ -15,18 +20,39 @@ export const scoreAnswer = async ({ transcriptText, referenceAnswer, keywords })
     };
   }
 
+  const payload = {
+  interview_id: interviewId,
+  question_id: questionId,
+  transcript_text: transcriptText,
+  reference_answer: referenceAnswer,
+  keywords,
+  confidence_score: confidenceScore ?? null,
+};
+
+console.log("Sending NLP payload:", payload);
+
   const response = await fetch(process.env.NLP_SERVICE_URL, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      transcript_text: transcriptText,
-      reference_answer: referenceAnswer,
-      keywords,
-    }),
+    headers: {
+      "Content-Type": "application/json",
+    },
+body: JSON.stringify({
+  interview_id: interviewId,
+  question_id: questionId,
+  transcript_text: transcriptText,
+  reference_answer: referenceAnswer,
+  keywords: keywords || [],
+  confidence_score: confidenceScore ?? null,
+}),
   });
 
   if (!response.ok) {
-    throw new Error(`NLP scoring service responded with ${response.status}`);
+    const errorText = await response.text();
+    console.error("NLP service error:", errorText);
+
+    throw new Error(
+      `NLP scoring service responded with ${response.status}`
+    );
   }
 
   return response.json();

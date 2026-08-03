@@ -1,0 +1,19 @@
+Firstlyy create:
+ .env fle 
+ and copy everything from :
+ .env.example file. 
+
+then open pgadmin and crete a database and name it :   interview_system
+
+
+// then run these commands.
+
+
+cd .\backend-Interview-system\
+npm install
+npm run seed
+npm run dev
+
+then you can directly login with seededUser:
+        email: smarika@example.com
+        password: "Smarika@123"
