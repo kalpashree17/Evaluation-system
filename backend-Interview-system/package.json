@@ -1,0 +1,29 @@
+{
+  "name": "ai-interview-system-backend",
+  "version": "1.0.0",
+  "description": "Backend for AI interview system",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "seed":"node src/seed/index.js"
+  },
+  "dependencies": {
+    "@koa/cors": "^5.0.0",
+    "@koa/router": "^12.0.1",
+    "bcryptjs": "^2.4.3",
+    "csv-parse": "^7.0.1",
+    "dotenv": "^16.4.5",
+    "jsonwebtoken": "^9.0.2",
+    "koa": "^2.15.3",
+    "koa-body": "^8.0.0",
+    "koa-bodyparser": "^4.4.1",
+    "pg": "^8.11.5",
+    "reflect-metadata": "^0.2.2",
+    "typeorm": "^0.3.20"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.0"
+  }
+}
