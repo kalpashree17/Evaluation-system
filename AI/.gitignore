@@ -1,0 +1,5 @@
+# Whisper virtual environment
+whisper-env/
+
+# Python cache
+whisper/__pycache__/

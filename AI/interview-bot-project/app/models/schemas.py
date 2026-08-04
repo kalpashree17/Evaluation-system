@@ -25,19 +25,19 @@ class AnswerScoreRequest(BaseModel):
     wiring up the whole Node backend), we fall back to looking them up
     from the local question bank CSV.
     """
-    interview_id: str
+    # interview_id: str
     question_id: str
     transcript_text: str
-    reference_answer: Optional[str] = None
-    keywords: Optional[List[KeywordItem]] = None
-    confidence_score: Optional[float] = None  # placeholder until audio service exists
+    # reference_answer: Optional[str] = None
+    # keywords: Optional[List[KeywordItem]] = None
+    # confidence_score: Optional[float] = None  # placeholder until audio service exists
 
 
 class AnswerScoreResponse(BaseModel):
     """What we send back per answer — matches Contract B's response shape,
     plus keyword-match details for transparent feedback."""
     question_id: str
-    confidence_score: float
+    # confidence_score: float
     keyword_score: float
     tfidf_score: float
     semantic_score: float
@@ -55,7 +55,7 @@ class InterviewSummaryResponse(BaseModel):
     score plus the averaged score across the whole session."""
     interview_id: str
     total_questions_answered: int
-    average_confidence_score: float
+    # average_confidence_score: float
     average_keyword_score: float
     average_tfidf_score: float
     average_semantic_score: float
