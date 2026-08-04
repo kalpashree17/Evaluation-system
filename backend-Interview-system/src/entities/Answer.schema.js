@@ -5,9 +5,9 @@ export const Answer = new EntitySchema({
   tableName: "answers",
   columns: {
     id: {
-      type: "uuid",
+      type: "int",
       primary: true,
-      generated: "uuid",
+      generated: true, // auto-increment
     },
     transcriptText: {
       type: "text",
@@ -53,6 +53,12 @@ export const Answer = new EntitySchema({
       type: "text",
       array: true,
       name: "missing_keywords",
+      nullable: true,
+    },
+    negatedKeywords: {
+      type: "text",
+      array: true,
+      name: "negated_keywords",
       nullable: true,
     },
     strengths: {
