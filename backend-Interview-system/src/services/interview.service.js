@@ -8,7 +8,6 @@ import { Skill } from "../entities/Skill.schema.js";
 import { QuestionBank } from "../entities/QuestionBank.schema.js";
 import { ApiError } from "../utils/ApiError.js";
 import { LEVEL_TO_DIFFICULTY, difficultyToLevel } from "../utils/difficulty.js";
-import { isUuid } from "../utils/isUuid.js";
 
 const interviewRepository = () => AppDataSource.getRepository(Interview);
 const progressRepository = () => AppDataSource.getRepository(InterviewSkillProgress);
@@ -16,6 +15,11 @@ const questionRepository = () => AppDataSource.getRepository(Question);
 const answerRepository = () => AppDataSource.getRepository(Answer);
 const skillRepository = () => AppDataSource.getRepository(Skill);
 const questionBankRepository = () => AppDataSource.getRepository(QuestionBank);
+
+// Interview.id is a plain auto-increment int (was uuid), same as
+// Question.id and Answer.id — check it's a positive integer instead of
+// importing isUuid.
+const isPositiveInteger = (value) => /^\d+$/.test(String(value)) && Number(value) > 0;
 
 // Starts an interview across one or more skills. Seeds a per-skill
 // difficulty progress row for each selected skill (all starting at the
@@ -87,12 +91,12 @@ export const startInterview = async ({ userId, skillIds, startingLevel }) => {
 };
 
 export const findInterviewOrThrow = async (interviewId) => {
-  if (!isUuid(interviewId)) {
+  if (!isPositiveInteger(interviewId)) {
     throw new ApiError(400, "Invalid interview id");
   }
 
   const interview = await interviewRepository().findOne({
-    where: { id: interviewId },
+    where: { id: Number(interviewId) },
     relations: { user: true, skills: true },
   });
   if (!interview) {
@@ -177,8 +181,9 @@ export const endInterview = async ({ interviewId, userId }) => {
 
 // Final report — grouped per skill. The "assessed level" for each skill
 // comes from where that skill's difficulty trajectory settled
-// (difficultyToLevel), not from a flat average score. Average score is
-// still included as supporting context, not as the headline result.
+// (difficultyToLevel), not from a flat average score. Average score and
+// average STT confidence are included as supporting context, not as the
+// headline result.
 export const getInterviewReport = async ({ interviewId, userId }) => {
   const interview = await findInterviewOrThrow(interviewId);
   assertOwnsInterview(interview, userId);
@@ -205,22 +210,31 @@ export const getInterviewReport = async ({ interviewId, userId }) => {
     bySkillId[skillId].push(q);
   }
 
+  const average = (nums) => (nums.length ? nums.reduce((a, b) => a + b, 0) / nums.length : null);
+
   const skillBreakdown = progressRows.map((progress) => {
     const questions = bySkillId[progress.skill.id] || [];
+
+    // Only answered questions count toward either average — unanswered
+    // questions (q.answer is null) are excluded rather than treated as 0.
     const scores = questions.map((q) => (q.answer ? Number(q.answer.finalScore) : null)).filter((s) => s !== null);
-    const avgScore = scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : null;
+    const confidenceScores = questions
+      .map((q) => (q.answer ? Number(q.answer.confidenceScore) : null))
+      .filter((s) => s !== null);
 
     return {
       skill: progress.skill.name,
       final_difficulty_reached: Number(progress.currentDifficulty),
       assessed_level: difficultyToLevel(Number(progress.currentDifficulty)),
-      average_score_at_that_level: avgScore,
+      average_score_at_that_level: average(scores),
+      average_confidence_score: average(confidenceScores),
       questions_asked: questions.length,
       questions: questions.map((q) => ({
         order_index: q.orderIndex,
         question_text: q.questionText,
         difficulty_level: Number(q.difficultyLevel),
         transcript_text: q.answer?.transcriptText ?? null,
+        confidence_score: q.answer ? Number(q.answer.confidenceScore) : null,
         final_score: q.answer ? Number(q.answer.finalScore) : null,
         strengths: q.answer?.strengths ?? [],
         weaknesses: q.answer?.weaknesses ?? [],

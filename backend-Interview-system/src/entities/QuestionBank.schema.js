@@ -1,3 +1,6 @@
+
+
+
 import { EntitySchema } from "typeorm";
 
 export const QuestionBank = new EntitySchema({
@@ -5,10 +8,10 @@ export const QuestionBank = new EntitySchema({
   tableName: "question_bank",
   columns: {
     id: {
-      type: "varchar",
+      type: "int",
       primary: true,
-      // NOT generated — this must be the exact question_id from the spreadsheet,
-      // since the FastAPI service keys off the same id
+      // NOT generated — this must be the exact question_id from the CSV
+      // (1–75), since the NLP service keys its lookup off this same id.
     },
     questionText: {
       type: "text",
