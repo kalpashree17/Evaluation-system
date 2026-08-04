@@ -26,44 +26,52 @@ router = APIRouter()
 
 @router.post("/score/answer", response_model=AnswerScoreResponse)
 def score_answer(request: AnswerScoreRequest):
-    # ---- Step 0: resolve reference_answer + keywords ----
-    # Prefer what the caller sent (real Contract B usage from Express).
-    # Fall back to the local question bank if only question_id was given
-    # (handy for quick manual testing via /docs).
-    reference_answer = request.reference_answer
-    keywords = request.keywords
+    # ---- Step 0: Get reference answer and keywords from the question bank ----
+    bank_entry = state.question_bank.get(request.question_id)
+    if bank_entry is None:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Question ID '{request.question_id}' not found in the question bank.",
+        )
 
-    if reference_answer is None or keywords is None:
-        bank_entry = state.question_bank.get(request.question_id)
-        if bank_entry is None:
-            raise HTTPException(
-                status_code=400,
-                detail=f"No reference_answer/keywords provided and question_id "
-                        f"'{request.question_id}' not found in local question bank.",
-            )
-        reference_answer = reference_answer or bank_entry["reference_answer"]
-        keywords = keywords or bank_entry["keywords"]
+    reference_answer = bank_entry["reference_answer"]
+    keywords = bank_entry["keywords"]
 
-    # ---- Step 1: keyword matching (our own algorithm) ----
-    keyword_result = score_keywords(request.transcript_text, keywords, state.rarity_map)
+    # ---- Step 1: Keyword matching ----
+    keyword_result = score_keywords(
+        request.transcript_text,
+        keywords,
+        state.rarity_map,
+    )
 
     # ---- Step 2: TF-IDF lexical similarity ----
-    tfidf_score = tfidf_similarity(request.transcript_text, reference_answer)
+    tfidf_score = tfidf_similarity(
+        request.transcript_text,
+        reference_answer,
+    )
 
     # ---- Step 3: SBERT semantic similarity ----
-    semantic_score = semantic_similarity(request.transcript_text, reference_answer, state.sbert_model)
+    semantic_score = semantic_similarity(
+        request.transcript_text,
+        reference_answer,
+        state.sbert_model,
+    )
 
-    # ---- Step 4: confidence score placeholder ----
-    # Real value will come from the audio-analysis service later (Contract A).
-    confidence_score = request.confidence_score if request.confidence_score is not None else DEFAULT_CONFIDENCE_SCORE
+    # ---- Step 4: Compute final score and feedback ----
+    final_score = compute_final_score(
+        keyword_result["score"],
+        tfidf_score,
+        semantic_score,
+    )
 
-    # ---- Step 5: combine into final_score + generate feedback ----
-    final_score = compute_final_score(keyword_result["score"], tfidf_score, semantic_score)
-    feedback = build_feedback(keyword_result, tfidf_score, semantic_score)
+    feedback = build_feedback(
+        keyword_result,
+        tfidf_score,
+        semantic_score,
+    )
 
-    response = AnswerScoreResponse(
+    return AnswerScoreResponse(
         question_id=request.question_id,
-        confidence_score=confidence_score,
         keyword_score=keyword_result["score"],
         tfidf_score=tfidf_score,
         semantic_score=semantic_score,
@@ -75,11 +83,6 @@ def score_answer(request: AnswerScoreRequest):
         weaknesses=feedback["weaknesses"],
         areas_for_improvement=feedback["areas_for_improvement"],
     )
-
-    # ---- Step 6: store this answer's score under its interview session ----
-    session_store.add_score(request.interview_id, response)
-
-    return response
 
 
 @router.post("/interview/{interview_id}/end", response_model=InterviewSummaryResponse)
@@ -95,7 +98,7 @@ def end_interview(interview_id: str):
     summary = InterviewSummaryResponse(
         interview_id=interview_id,
         total_questions_answered=total,
-        average_confidence_score=avg("confidence_score"),
+        # average_confidence_score=avg("confidence_score"),
         average_keyword_score=avg("keyword_score"),
         average_tfidf_score=avg("tfidf_score"),
         average_semantic_score=avg("semantic_score"),
