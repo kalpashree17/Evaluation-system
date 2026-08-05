@@ -1,5 +1,3 @@
-
-
 /*
 Flow before reaching this service:
 
@@ -31,23 +29,45 @@ import { Answer } from "../entities/Answer.schema.js";
 import { InterviewSkillProgress } from "../entities/InterviewSkillProgress.schema.js";
 import { ApiError } from "../utils/ApiError.js";
 import { adjustDifficulty } from "../utils/difficulty.js";
-import { isUuid } from "../utils/isUuid.js";
 import { transcribeAudio } from "./sttClient.js";
 import { scoreAnswer } from "./nlpClient.js";
-import { getReferenceData } from "../config/questionBankData.js";
 import { pickNextQuestion } from "./interview.service.js";
 
 const questionRepository = () => AppDataSource.getRepository(Question);
 const answerRepository = () => AppDataSource.getRepository(Answer);
 const progressRepository = () => AppDataSource.getRepository(InterviewSkillProgress);
 
-export const submitAnswer = async ({ questionId, userId, audioFilePath }) => {
-  if (!isUuid(questionId)) {
-    throw new ApiError(400, "Invalid question id");
+// Question.id is now a plain auto-increment int (was uuid), so we just
+// check it's a positive integer instead of importing isUuid.
+const isPositiveInteger = (value) => /^\d+$/.test(String(value)) && Number(value) > 0;
+
+// Turns a 0–1 confidence score into a short, human-readable message.
+// Kept separate from the NLP evaluation block on purpose — confidence
+// describes how clearly the speech was transcribed, not how good the
+// answer's content was.
+const buildTranscriptionFeedback = (confidenceScore) => {
+  const pct = Math.round(Number(confidenceScore) * 100);
+
+  let message;
+  if (pct >= 85) {
+    message = `Your speech was transcribed with high confidence (${pct}%).`;
+  } else if (pct >= 60) {
+    message = `Your speech was transcribed with moderate confidence (${pct}%). Some words may have been misheard.`;
+  } else {
+    message = `Your speech was transcribed with low confidence (${pct}%). Consider speaking clearly in a quiet environment.`;
   }
 
+  return { confidence_score: pct / 100, message };
+};
+
+export const submitAnswer = async ({ questionId, userId, audioFilePath }) => {
+  if (!isPositiveInteger(questionId)) {
+    throw new ApiError(400, "Invalid question id");
+  }
+  const numericQuestionId = Number(questionId);
+
   const question = await questionRepository().findOne({
-    where: { id: questionId },
+    where: { id: numericQuestionId },
     relations: { interview: { user: true, skills: true }, questionBank: { skill: true } },
   });
 
@@ -65,79 +85,70 @@ export const submitAnswer = async ({ questionId, userId, audioFilePath }) => {
     throw new ApiError(409, "This interview has already ended");
   }
 
-  // const existingAnswer = await answerRepository().findOne({ where: { question: { id: question.id } } });
-  // if (existingAnswer) {
-  //   throw new ApiError(409, "This question has already been answered");
-  // }
-
   const existingAnswer = await answerRepository().findOne({
-  where: { question: { id: question.id } },
-});
-
-if (existingAnswer) {
-  // This question was already answered.
-  // Instead of returning an error, continue the interview by
-  // serving the next available question.
-
-  const allSkillIds = interview.skills.map((s) => s.id);
-
-  const { nextQuestionBank, progress: nextProgress } = await pickNextQuestion({
-    interviewId: interview.id,
-    skillIds: allSkillIds,
+    where: { question: { id: question.id } },
   });
 
-  let nextQuestion = null;
+  if (existingAnswer) {
+    // This question was already answered.
+    // Instead of returning an error, continue the interview by
+    // serving the next available question.
 
-  if (nextQuestionBank) {
-    const askedCount = await questionRepository().count({
-      where: { interview: { id: interview.id } },
+    const allSkillIds = interview.skills.map((s) => s.id);
+
+    const { nextQuestionBank, progress: nextProgress } = await pickNextQuestion({
+      interviewId: interview.id,
+      skillIds: allSkillIds,
     });
 
-    const newQuestionRow = questionRepository().create({
-      interview: { id: interview.id },
-      questionBank: { id: nextQuestionBank.id },
-      questionText: nextQuestionBank.questionText,
-      difficultyLevel: nextQuestionBank.difficultyLevel,
-      orderIndex: askedCount + 1,
-    });
+    let nextQuestion = null;
 
-    await questionRepository().save(newQuestionRow);
+    if (nextQuestionBank) {
+      const askedCount = await questionRepository().count({
+        where: { interview: { id: interview.id } },
+      });
 
-    nextQuestion = {
-      id: newQuestionRow.id,
-      question_text: newQuestionRow.questionText,
-      difficulty_level: Number(newQuestionRow.difficultyLevel),
-      skill_id: nextProgress.skill.id,
+      const newQuestionRow = questionRepository().create({
+        interview: { id: interview.id },
+        questionBank: { id: nextQuestionBank.id },
+        questionText: nextQuestionBank.questionText,
+        difficultyLevel: nextQuestionBank.difficultyLevel,
+        orderIndex: askedCount + 1,
+      });
+
+      await questionRepository().save(newQuestionRow);
+
+      nextQuestion = {
+        id: newQuestionRow.id,
+        question_text: newQuestionRow.questionText,
+        difficulty_level: Number(newQuestionRow.difficultyLevel),
+        skill_id: nextProgress.skill.id,
+      };
+    }
+
+    return {
+      message: "This question has already been answered. Continuing with the next question.",
+      next_question: nextQuestion,
     };
   }
-
-  return {
-    message: "This question has already been answered. Continuing with the next question.",
-    next_question: nextQuestion,
-  };
-}
 
   // Contract A: Backend -> STT/audio-analysis service
   // Send the audio to Whisper
   const stt = await transcribeAudio(audioFilePath);
 
-  // reference_answer/keywords aren't stored in Postgres — read from the same
-  // CSV question_bank was seeded from, keyed by the shared question_bank id
-  const { referenceAnswer, keywords } = question.questionBank
-    ? getReferenceData(question.questionBank.id)
-    : { referenceAnswer: null, keywords: [] };
+  if (!question.questionBank) {
+    throw new ApiError(500, "Question has no linked question bank entry — cannot score");
+  }
 
-  console.log("REFERENCE ANSWER:", referenceAnswer);
-  console.log("KEYWORDS SENT TO NLP:", JSON.stringify(keywords, null, 2));
-
-  // Contract B: Backend -> friend's NLP scoring service
+  // Contract B (updated): Backend -> NLP scoring service
+  // Only sends question_id + transcript_text  — NLP looks up its own
+  // reference data. IMPORTANT: question_id here is question.questionBank.id
+  // (the CSV master id, 1–75), NOT question.id (the per-interview row id).
+  // Both are plain ints now, so this is easy to get wrong silently — no
+  // type error will save you if you swap them.
   const nlp = await scoreAnswer({
-    interviewId: interview.id,
-    questionId: question.id,
+    questionId: question.questionBank.id,
     transcriptText: stt.transcript_text,
-    referenceAnswer,
-    keywords,
-    confidenceScore: stt.confidence_score,
   });
 
   const answer = answerRepository().create({
@@ -150,15 +161,13 @@ if (existingAnswer) {
     finalScore: nlp.final_score,
     matchedKeywords: nlp.matched_keywords,
     missingKeywords: nlp.missing_keywords,
+    negatedKeywords: nlp.negated_keywords ?? [],
     strengths: nlp.strengths,
     weaknesses: nlp.weaknesses,
     areasForImprovement: nlp.areas_for_improvement,
   });
   await answerRepository().save(answer);
 
-  // fixed: update ONLY this question's skill difficulty, not the whole
-  // interview. question.questionBank.skill tells us which skill this
-  // particular question belonged to.
   if (!question.questionBank?.skill) {
     throw new ApiError(500, "Question has no linked skill — cannot update difficulty progress");
   }
@@ -175,8 +184,7 @@ if (existingAnswer) {
   progress.questionsAsked += 1;
   await progressRepository().save(progress);
 
-  // fixed: round-robin next question across ALL skills selected for this
-  // interview, not just the one just answered
+  // round-robin next question across ALL skills selected for this interview
   const allSkillIds = interview.skills.map((s) => s.id);
   const { nextQuestionBank, progress: nextProgress } = await pickNextQuestion({
     interviewId: interview.id,
@@ -205,12 +213,17 @@ if (existingAnswer) {
   }
 
   return {
+    // Separate from `evaluation` on purpose — this is STT's read on
+    // audio clarity, not a judgement of the answer's content.
+    transcription: buildTranscriptionFeedback(answer.confidenceScore),
     evaluation: {
-      confidence_score: Number(answer.confidenceScore),
       keyword_score: Number(answer.keywordScore),
       tfidf_score: Number(answer.tfidfScore),
       semantic_score: Number(answer.semanticScore),
       final_score: Number(answer.finalScore),
+      matched_keywords: answer.matchedKeywords,
+      missing_keywords: answer.missingKeywords,
+      negated_keywords: answer.negatedKeywords ?? [],
       strengths: answer.strengths,
       weaknesses: answer.weaknesses,
       areas_for_improvement: answer.areasForImprovement,

@@ -1,3 +1,5 @@
+
+
 import { EntitySchema } from "typeorm";
 
 export const Question = new EntitySchema({
@@ -5,9 +7,13 @@ export const Question = new EntitySchema({
   tableName: "questions",
   columns: {
     id: {
-      type: "uuid",
+      type: "int",
       primary: true,
-      generated: "uuid",
+      generated: true, // auto-increment (SERIAL): 1, 2, 3...
+      // NOTE: this is the per-interview question instance id — NOT the
+      // same thing as QuestionBank.id (the CSV master id, 1–75). Both are
+      // plain integers now, so it's easy to mix them up. Anything sent to
+      // the NLP service must use question.questionBank.id, not this id.
     },
     questionText: {
       type: "text",

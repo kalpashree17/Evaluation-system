@@ -1,3 +1,6 @@
+
+
+
 import { EntitySchema } from "typeorm";
 
 export const STARTING_LEVELS = ["easy", "mid", "expert"];
@@ -8,9 +11,9 @@ export const Interview = new EntitySchema({
   tableName: "interviews",
   columns: {
     id: {
-      type: "uuid",
+      type: "int",
       primary: true,
-      generated: "uuid",
+      generated: true, // auto-increment (SERIAL): 1, 2, 3...
     },
     startingLevel: {
       type: "enum",

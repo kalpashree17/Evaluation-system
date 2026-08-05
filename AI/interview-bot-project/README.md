@@ -24,70 +24,56 @@ by hand before Express is wired up.
 
 ## Endpoints
 
-### `POST /score/answer` — score one question
+### `POST /score/answer` — Score one interview answer
+
+Scores a candidate's response for a single interview question using keyword matching, TF-IDF similarity, and semantic similarity. The endpoint returns detailed feedback and automatically stores the score under the provided `interview_id` for later interview summary generation.
+
+#### Request
+
 ```json
 {
-  "interview_id": "interview-abc",
-  "question_id": "1",
-  "transcript_text": "So double equals does coercion between types...",
-  "reference_answer": "optional — falls back to local CSV lookup by question_id if omitted",
-  "keywords": "optional — same fallback applies",
-  "confidence_score": null
+  "question_id": "2",
+  "transcript_text": "var is function scoped and gets hoisted with undefined, let and const are block scoped, and const can't be reassigned after you declare it."
 }
 ```
-Returns keyword/tfidf/semantic/final scores + strengths/weaknesses/areas_for_improvement,
-and stores this score under `interview_id` in memory.
 
-> `reference_answer` / `keywords` are optional ONLY for local testing —
-> in real use, Express should always send them (per Contract B), since
-> in production Postgres is the source of truth, not this CSV.
+#### Response
 
-### `POST /interview/{interview_id}/end` — close a session
-Averages every score collected for that `interview_id` under `/score/answer`
-and returns the full per-question breakdown + averages. Clears the
-in-memory session afterward.
-
-## Folder structure
-
-```
-interview-bot/
-├── requirements.txt
-├── README.md
-└── app/
-    ├── main.py                    # FastAPI app, loads SBERT/rarity/bank at startup
-    ├── config.py                  # every tunable weight/threshold
-    ├── state.py                   # shared in-memory objects (model, rarity map, bank)
-    ├── models/
-    │   └── schemas.py             # Pydantic request/response models
-    ├── services/
-    │   ├── keyword_matching.py    # tiers + aliases + fuzzy + negation + rarity
-    │   ├── rarity.py              # computes keyword rarity from the question bank
-    │   ├── tfidf_scoring.py       # TF-IDF cosine similarity
-    │   ├── semantic_scoring.py    # SBERT cosine similarity
-    │   ├── final_score.py         # weighted combination + feedback text
-    │   └── question_bank.py       # loads CSV for fallback lookups by question_id
-    ├── routers/
-    │   └── scoring.py             # /score/answer and /interview/{id}/end
-    ├── store/
-    │   └── session_store.py       # in-memory interview_id -> [scores] (temporary, pre-Postgres)
-    ├── utils/
-    │   └── text_utils.py          # 3 preprocessing variants (semantic / deep / light)
-    └── data/
-        └── question_dataset_structured.csv
+```json
+{
+  "question_id": "2",
+  "keyword_score": 0.8462,
+  "tfidf_score": 0.3429,
+  "semantic_score": 0.9327,
+  "final_score": 0.7715,
+  "matched_keywords": [
+    "var",
+    "let",
+    "const",
+    "scope",
+    "hoisting"
+  ],
+  "missing_keywords": [
+    "temporal dead zone",
+    "reassignment"
+  ],
+  "negated_keywords": [],
+  "strengths": [
+    "Correctly covered: var, let, const",
+    "Overall explanation closely matches the expected meaning"
+  ],
+  "weaknesses": [
+    "Missed key concept(s): temporal dead zone, reassignment"
+  ],
+  "areas_for_improvement": [
+    "Review and explicitly mention: temporal dead zone, reassignment",
+    "Try using more of the precise terminology from the topic"
+  ]
+}
 ```
 
-## Known limitations (by design, for this stage)
+The endpoint automatically retrieves the reference answer and expected keywords for the given `question_id` from the local question dataset. The generated score is stored in memory under the supplied `interview_id` so it can be included in the final interview summary.
 
-- **Confidence score is a fixed placeholder** (`DEFAULT_CONFIDENCE_SCORE` in
-  `config.py`) until the audio-analysis service (Contract A) exists. Pass
-  `confidence_score` in the request to override it once that's ready.
-- **Session storage is in-memory**, not Postgres — restarting the server
-  loses any interview in progress. Swap `session_store.py` for real DB
-  writes once Express/Postgres integration begins; the response shapes
-  won't need to change.
-- **Keyword matching finds the first occurrence** of a term in the
-  transcript, not every occurrence — if a candidate says a term twice
-  (once correctly, once negated), only the first mention is evaluated.
-- **Negation/fuzzy matching are simple heuristics** (word-window lookback,
-  edit-distance ratio) — not a substitute for real dependency parsing,
-  but good enough to catch the common cases cheaply.
+### `POST /interview/{interview_id}/end` — Close an interview session (not required now)
+
+Calculates the average scores for all answers previously submitted through `/score/answer` for the specified `interview_id`. The response includes the per-question results together with the overall interview summary, then clears the in-memory session.
