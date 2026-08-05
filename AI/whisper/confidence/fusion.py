@@ -6,7 +6,7 @@ import tempfile
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from faster_whisper import WhisperModel
 
-from confidence import analyze_audio_confidence
+from audio_confidence import analyze_audio_confidence
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

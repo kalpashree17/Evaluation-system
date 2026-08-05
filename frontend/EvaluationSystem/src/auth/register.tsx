@@ -2,6 +2,11 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import api from '../utils/axiosInstance';
 
+function getErrorMessage(err: unknown, fallback: string): string {
+  const data = (err as { response?: { data?: { message?: string } } } | null)?.response?.data;
+  return data?.message || fallback;
+}
+
 type Role = 'admin' | 'user';
 
 interface RegisterFormData {
@@ -85,7 +90,7 @@ const Register: React.FC = () => {
 
     setLoading(true);
     try {
-      const response = await api.post('/api/auth/register', {
+      await api.post('/api/auth/register', {
         name: formData.name,
         email: formData.email,
         password: formData.password,
@@ -95,8 +100,8 @@ const Register: React.FC = () => {
 
    
       navigate('/login', { state: { message: 'Registration successful! Please sign in.' } });
-    } catch (err: any) {
-      setError(err?.response?.data?.message || 'Registration failed');
+    } catch (err) {
+      setError(getErrorMessage(err, 'Registration failed'));
     } finally {
       setLoading(false);
     }

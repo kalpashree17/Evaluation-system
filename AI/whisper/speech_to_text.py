@@ -4,6 +4,7 @@ from confidence import analyze_audio_confidence
 import shutil
 import tempfile
 import os
+import time
 
 app = FastAPI()
 
@@ -30,6 +31,19 @@ async def transcribe(audio: UploadFile = File(...)):
 
     print("Saved temp file:", tmp_path)
     print("File size:", os.path.getsize(tmp_path), "bytes")
+
+    # ── TEMP DIAGNOSTIC: keep a copy of every upload for offline inspection ──
+    try:
+        capture_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "captured")
+        os.makedirs(capture_dir, exist_ok=True)
+        captured_name = os.path.join(
+            capture_dir, f"{int(time.time())}_{os.path.basename(tmp_path)}"
+        )
+        shutil.copy(tmp_path, captured_name)
+        print("Captured upload:", captured_name)
+    except Exception as e:
+        print("Capture failed:", e)
+    # ── END TEMP DIAGNOSTIC ──
 
     try:
         # segments, info = model.transcribe(tmp_path)

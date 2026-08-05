@@ -2,6 +2,11 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/authContext';
 
+function getErrorMessage(err: unknown, fallback: string): string {
+  const data = (err as { response?: { data?: { message?: string } } } | null)?.response?.data;
+  return data?.message || fallback;
+}
+
 const Login: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -31,8 +36,8 @@ const Login: React.FC = () => {
         default:
           navigate('/dashboard');
       }
-    } catch (err: any) {
-      setError(err?.response?.data?.message || 'Login failed');
+    } catch (err) {
+      setError(getErrorMessage(err, 'Login failed'));
     } finally {
       setLoading(false);
     }
