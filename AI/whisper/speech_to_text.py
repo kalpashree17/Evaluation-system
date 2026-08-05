@@ -36,7 +36,8 @@ async def transcribe(audio: UploadFile = File(...)):
         segments, info = model.transcribe(
             tmp_path,
             language="en",
-            beam_size=5
+            beam_size=5,
+            word_timestamps=True,
         )
 
         segments = list(segments)
@@ -61,16 +62,14 @@ async def transcribe(audio: UploadFile = File(...)):
             tmp_path, word_timestamps=word_timestamps, text=text
         )
 
+        # Use the shared 65/35 acoustic/communication fusion from the
+        # confidence pipeline; do not apply a second, conflicting fusion here.
+        confidence_score = audio_result["confidence_score"]
+
     finally:
         os.remove(tmp_path)
 
     return {
         "transcript_text": text,
-        "confidence_score": audio_result["confidence_score"],
-        "acoustic_confidence": audio_result["acoustic_confidence"],
-        "communication_confidence": audio_result["communication_confidence"],
-        "modifier_delta": audio_result["modifier_delta"],
-        "acoustic_breakdown": audio_result["acoustic_breakdown"],
-        "communication_breakdown": audio_result["communication_breakdown"],
-        "raw_features": audio_result["raw_features"],
+        "confidence_score": confidence_score,
     }

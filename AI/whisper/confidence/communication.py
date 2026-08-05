@@ -1,12 +1,12 @@
 """
-Human Communication Layer — modifier (30 %) on the acoustic base score.
+Human Communication Layer — modifier (35 %) on the acoustic base score.
 
 Four linguistic / textual pillars:
 
-    1. Filler Behaviour        (10 %)  — hesitation markers & frequency
+    1. Filler Behaviour        (20 %)  — hesitation markers & frequency
     2. Lexical Certainty        (8 %)  — hedging vs. assertive language
-    3. Speaking Fluency         (7 %)  — repetitions, false starts
-    4. Response Organization    (5 %)  — topic coherence, tense consistency
+    3. Speaking Fluency         (4 %)  — repetitions, false starts
+    4. Response Organization    (3 %)  — topic coherence, tense consistency
 
 Internal weights are relative (sum to 1.0 within this tier).
 """
@@ -226,10 +226,10 @@ def response_organization_score(text: str) -> float:
 
 # Internal weights for the 4 communication pillars (must sum to 1.0)
 _COMMUNICATION_WEIGHTS = {
-    "filler_behaviour":     0.10 / 0.30,
-    "lexical_certainty":    0.08 / 0.30,
-    "fluency":              0.07 / 0.30,
-    "response_organization": 0.05 / 0.30,
+    "filler_behaviour":      0.20 / 0.35,   # 20/35 normalised
+    "lexical_certainty":     0.08 / 0.35,   #  8/35 normalised
+    "fluency":               0.04 / 0.35,   #  4/35 normalised
+    "response_organization": 0.03 / 0.35,   #  3/35 normalised
 }
 
 

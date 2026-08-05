@@ -18,7 +18,6 @@ import {
   ArrowRightOutlined,
   AudioOutlined,
   AudioFilled,
-  SoundOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import api from "../utils/axiosInstance";
@@ -53,12 +52,12 @@ interface AnswerResponse {
 }
 
 interface InterviewStartResponse {
-  interview_id: string;
+  interview_id: number;
   question: BackendQuestion;
 }
 
 interface InterviewEndResponse {
-  interview_id: string;
+  interview_id: number;
   total_questions_answered: number;
   average_confidence_score: number | null;
   average_keyword_score: number | null;
@@ -135,6 +134,12 @@ function closeAudioContext(ctx: AudioContext | null) {
   ctx.close().catch(() => {});
 }
 
+function formatRecordingTime(seconds: number) {
+  const minutes = Math.floor(seconds / 60).toString().padStart(2, "0");
+  const remainingSeconds = (seconds % 60).toString().padStart(2, "0");
+  return `${minutes}:${remainingSeconds}`;
+}
+
 // ==================== WAV ENCODER ====================
 
 function writeString(view: DataView, offset: number, str: string) {
@@ -186,11 +191,11 @@ const SetupScreen = ({
   onStart,
   loading,
 }: {
-  onStart: (skillId: number, startingLevel: string) => void;
+  onStart: (skillIds: number[], startingLevel: string) => void;
   loading: boolean;
 }) => {
   const [skillOptions, setSkillOptions] = useState<BackendSkill[]>([]);
-  const [selectedSkillId, setSelectedSkillId] = useState<number | null>(null);
+  const [selectedSkillIds, setSelectedSkillIds] = useState<number[]>([]);
   const [startingLevel, setStartingLevel] = useState<string>("easy");
 
   useEffect(() => {
@@ -206,11 +211,11 @@ const SetupScreen = ({
   }, []);
 
   const handleStart = () => {
-    if (!selectedSkillId) {
-      message.warning("Please select a skill");
+    if (!selectedSkillIds.length) {
+      message.warning("Please select at least one skill");
       return;
     }
-    onStart(selectedSkillId, startingLevel);
+    onStart(selectedSkillIds, startingLevel);
   };
 
   return (
@@ -235,13 +240,15 @@ const SetupScreen = ({
           <div className="space-y-5">
             <div>
               <label className="block text-xs uppercase tracking-wider text-slate-400 mb-1.5 font-medium">
-                Skill
+                Skills
               </label>
               <Select
-                value={selectedSkillId}
-                onChange={(value) => setSelectedSkillId(value)}
+                mode="multiple"
+                value={selectedSkillIds}
+                onChange={(value) => setSelectedSkillIds(value)}
                 size="large"
-                placeholder="Select a skill"
+                placeholder="Select one or more skills"
+                allowClear
                 className="w-full! bg-[#0d1221]! border! border-[#1e2943]! text-white! placeholder-slate-600! px-4! py-2.5! rounded-xl! text-sm! outline-none! focus:border-violet-500/50! transition-colors!"
                 options={skillOptions.map((s) => ({ label: s.name, value: s.id }))}
               />
@@ -284,7 +291,7 @@ const SetupScreen = ({
 export const AIInterviewEvaluation = () => {
   // ===== STATE =====
   const [messages, setMessages] = useState<Message[]>([]);
-  const [interviewId, setInterviewId] = useState<string | null>(null);
+  const [interviewId, setInterviewId] = useState<number | null>(null);
   const [currentQuestion, setCurrentQuestion] = useState<BackendQuestion | null>(null);
   const [questionCount, setQuestionCount] = useState(0);
   const [evaluationResult, setEvaluationResult] = useState<EvaluationResult | null>(null);
@@ -305,7 +312,9 @@ export const AIInterviewEvaluation = () => {
   // ===== REFS =====
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const countdownTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const questionStartRef = useRef<number>(0);
+  const firstQuestionShownRef = useRef(false);
 
 
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -354,7 +363,7 @@ export const AIInterviewEvaluation = () => {
     const height = canvas.height;
     ctx.clearRect(0, 0, width, height);
 
-    const barCount = 40;
+    const barCount = 56;
     const step = Math.max(1, Math.floor(bufferLength / barCount));
     const gap = 3;
     const barWidth = width / barCount - gap;
@@ -371,14 +380,15 @@ export const AIInterviewEvaluation = () => {
       }
       const avg = count > 0 ? sum / count : 0;
       const normalized = avg / 255;
-      const barHeight = Math.max(3, normalized * height);
+      const barHeight = Math.max(5, normalized * (height - 10));
 
       const x = i * (barWidth + gap);
       const y = (height - barHeight) / 2;
 
       const gradient = ctx.createLinearGradient(0, y, 0, y + barHeight);
-      gradient.addColorStop(0, "#ffffff");
-      gradient.addColorStop(1, "#94a3b8");
+      gradient.addColorStop(0, "#fda4af");
+      gradient.addColorStop(0.5, "#fb7185");
+      gradient.addColorStop(1, "#a78bfa");
       ctx.fillStyle = gradient;
 
       const radius = Math.min(barWidth / 2, 3);
@@ -406,10 +416,23 @@ export const AIInterviewEvaluation = () => {
     }
   };
 
+  // Start after React has rendered the canvas. Starting it inside
+  // startRecording can run before the recording UI exists in the DOM.
+  useEffect(() => {
+    if (!isRecording) {
+      stopWaveformLoop();
+      return;
+    }
+
+    animationFrameRef.current = requestAnimationFrame(drawWaveform);
+    return stopWaveformLoop;
+  }, [isRecording]);
+
   useEffect(() => {
     const timer = timerRef.current;
     return () => {
       if (timer) clearInterval(timer);
+      if (countdownTimerRef.current) clearInterval(countdownTimerRef.current);
       stopWaveformLoop();
       stopRecordingTracks();
     };
@@ -431,8 +454,8 @@ export const AIInterviewEvaluation = () => {
       const processor = audioCtx.createScriptProcessor(4096, 1, 1);
 
       const analyser = audioCtx.createAnalyser();
-      analyser.fftSize = 128;
-      analyser.smoothingTimeConstant = 0.75;
+      analyser.fftSize = 256;
+      analyser.smoothingTimeConstant = 0.82;
       analyserRef.current = analyser;
 
       rawPcmRef.current = [];
@@ -449,8 +472,6 @@ export const AIInterviewEvaluation = () => {
       setIsRecording(true);
       setPhase("recording");
       setRecordingDuration(0);
-
-      animationFrameRef.current = requestAnimationFrame(drawWaveform);
 
       recordingTimerRef.current = setInterval(() => {
         setRecordingDuration((prev) => prev + 1);
@@ -676,14 +697,17 @@ export const AIInterviewEvaluation = () => {
 
   // ===== COUNTDOWN =====
   const startCountdown = () => {
+    if (countdownTimerRef.current) return;
+
     setShowCountdown(true);
     setCountdownValue(3);
     setPhase("countdown");
 
-    const interval = setInterval(() => {
+    countdownTimerRef.current = setInterval(() => {
       setCountdownValue((prev) => {
         if (prev <= 1) {
-          clearInterval(interval);
+          if (countdownTimerRef.current) clearInterval(countdownTimerRef.current);
+          countdownTimerRef.current = null;
           setShowCountdown(false);
           setPhase("idle");
           showFirstQuestion();
@@ -696,7 +720,10 @@ export const AIInterviewEvaluation = () => {
 
   // ===== SHOW FIRST QUESTION =====
   const showFirstQuestion = () => {
-    if (!currentQuestion) return;
+    // A countdown can only add the first question once. This protects the
+    // initial render from rapid clicks or duplicate countdown callbacks.
+    if (!currentQuestion || firstQuestionShownRef.current) return;
+    firstQuestionShownRef.current = true;
 
     const questionMessage: Message = {
       id: nextId("q"),
@@ -712,12 +739,12 @@ export const AIInterviewEvaluation = () => {
   };
 
   // ===== INITIALIZE INTERVIEW (calls POST /api/interviews) =====
-  const initializeInterview = async (skillId: number, startingLevel: string) => {
+  const initializeInterview = async (skillIds: number[], startingLevel: string) => {
     setPhase("starting");
 
     try {
       const response = await api.post("/api/interviews", {
-        skill_id: skillId,
+        skill_ids: skillIds,
         starting_level: startingLevel,
       });
 
@@ -726,6 +753,7 @@ export const AIInterviewEvaluation = () => {
       setInterviewId(data.interview_id);
       setCurrentQuestion(data.question);
       setQuestionCount(1);
+      firstQuestionShownRef.current = false;
       setSessionComplete(false);
       setShowEvaluation(false);
       setEvaluationResult(null);
@@ -870,7 +898,24 @@ export const AIInterviewEvaluation = () => {
     if (phase !== "question" && phase !== "recording") return null;
 
     return (
-      <div className="flex flex-col items-center gap-4 py-8">
+      <div className="flex flex-col items-center gap-5 py-3 sm:py-5">
+        {isRecording && (
+          <div className="w-full max-w-xl rounded-2xl border border-rose-500/30 bg-linear-to-br from-rose-500/10 via-[#141928] to-violet-500/10 px-4 py-3 shadow-lg shadow-rose-950/20">
+            <div className="mb-2 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="relative flex h-2.5 w-2.5">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-rose-400 opacity-75" />
+                  <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-rose-500" />
+                </span>
+                <span className="text-xs font-semibold tracking-widest text-rose-300">RECORDING</span>
+              </div>
+              <span className="font-mono text-sm font-semibold text-white">{formatRecordingTime(recordingDuration)}</span>
+            </div>
+            <canvas ref={waveformCanvasRef} width={640} height={92} className="h-20 w-full" aria-label="Live microphone waveform" />
+            <p className="mt-1 text-center text-xs text-slate-400">Your voice is being captured live</p>
+          </div>
+        )}
+
         <div className="flex items-center gap-5">
           <button
             onClick={handleMicClick}
@@ -884,7 +929,7 @@ export const AIInterviewEvaluation = () => {
               }`}
             />
             <div
-              className={`relative w-20 h-20 rounded-full flex items-center justify-center transition-all duration-300 shadow-lg ${
+              className={`relative w-20 h-20 sm:w-24 sm:h-24 rounded-full flex items-center justify-center transition-all duration-300 shadow-lg ${
                 isRecording
                   ? "bg-linear-to-br from-rose-600 to-rose-500 shadow-rose-500/40 scale-110"
                   : "bg-linear-to-br from-violet-600 to-indigo-600 shadow-violet-500/30 group-hover:shadow-violet-500/50 group-hover:scale-105"
@@ -920,7 +965,7 @@ export const AIInterviewEvaluation = () => {
                 <span className="relative inline-flex rounded-full h-3 w-3 bg-rose-500" />
               </span>
               <span className="text-rose-400 text-sm font-medium">Recording your answer...</span>
-              <span className="text-rose-400/70 text-xs font-mono">{recordingDuration}s</span>
+              <span className="text-rose-400/70 text-xs font-mono">{formatRecordingTime(recordingDuration)}</span>
             </div>
           ) : (
             <div>
@@ -930,9 +975,6 @@ export const AIInterviewEvaluation = () => {
           )}
         </div>
 
-        {isRecording && (
-          <canvas ref={waveformCanvasRef} width={320} height={64} className="w-full max-w-[320px] h-16" />
-        )}
       </div>
     );
   };

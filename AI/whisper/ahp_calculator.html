@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Confidence Weight AHP Calculator</title>
+  <style>
+    body { font: 16px/1.45 system-ui, sans-serif; max-width: 1080px; margin: 32px auto; padding: 0 16px; color: #1f2937; }
+    h1 { margin-bottom: 4px; } .note { color: #4b5563; }
+    button { background: #2563eb; color: white; border: 0; border-radius: 6px; padding: 10px 14px; margin: 8px 8px 16px 0; cursor: pointer; }
+    table { border-collapse: collapse; width: 100%; margin: 12px 0 24px; }
+    th, td { border: 1px solid #d1d5db; padding: 8px; text-align: left; }
+    th { background: #eff6ff; } select { width: 100%; padding: 5px; }
+    .good { color: #15803d; font-weight: 700; } .bad { color: #b91c1c; font-weight: 700; }
+  </style>
+</head>
+<body>
+  <h1>Confidence Analysis AHP Calculator</h1>
+  <p class="note">Compare every pair using Saaty's 1-9 scale. The calculator computes the principal-eigenvector weights and the Consistency Ratio (CR). A CR below 0.10 is acceptable.</p>
+  <button id="preset">Load suggested preset</button>
+  <button id="compute">Compute weights</button>
+  <table>
+    <thead><tr><th>Parameter A</th><th>Relative importance</th><th>Parameter B</th></tr></thead>
+    <tbody id="comparisons"></tbody>
+  </table>
+  <section id="result"></section>
+
+  <script>
+    const criteria = [
+      { id: 'filler_behaviour', label: 'Filler behaviour', group: 'Communication', suggested: 20 },
+      { id: 'speech_rate', label: 'Speech rate', group: 'Acoustic', suggested: 20 },
+      { id: 'pause_score', label: 'Pause score', group: 'Acoustic', suggested: 17 },
+      { id: 'pitch_variation', label: 'Pitch variation', group: 'Acoustic', suggested: 12 },
+      { id: 'energy_stability', label: 'Energy stability', group: 'Acoustic', suggested: 10 },
+      { id: 'lexical_certainty', label: 'Lexical certainty', group: 'Communication', suggested: 8 },
+      { id: 'silence_ratio', label: 'Silence ratio', group: 'Acoustic', suggested: 6 },
+      { id: 'fluency', label: 'Fluency', group: 'Communication', suggested: 4 },
+      { id: 'response_organization', label: 'Response organization', group: 'Communication', suggested: 3 },
+    ];
+    const scale = [1/9, 1/8, 1/7, 1/6, 1/5, 1/4, 1/3, 1/2, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+    const pairList = [];
+    const tbody = document.getElementById('comparisons');
+
+    function optionLabel(value) {
+      if (value === 1) return 'Equal importance (1)';
+      if (value > 1) return `A is ${value}x more important than B`;
+      return `B is ${Math.round(1 / value)}x more important than A`;
+    }
+
+    for (let i = 0; i < criteria.length; i++) {
+      for (let j = i + 1; j < criteria.length; j++) {
+        const pair = { i, j };
+        pairList.push(pair);
+        const row = document.createElement('tr');
+        const select = document.createElement('select');
+        select.id = `pair-${i}-${j}`;
+        scale.forEach(value => {
+          const option = document.createElement('option');
+          option.value = value;
+          option.textContent = optionLabel(value);
+          if (value === 1) option.selected = true;
+          select.appendChild(option);
+        });
+        row.innerHTML = `<td>${criteria[i].label} <small>(${criteria[i].group})</small></td>`;
+        const cell = document.createElement('td'); cell.appendChild(select); row.appendChild(cell);
+        row.innerHTML += `<td>${criteria[j].label} <small>(${criteria[j].group})</small></td>`;
+        tbody.appendChild(row);
+      }
+    }
+
+    function nearestSaaty(value) {
+      return scale.reduce((best, candidate) =>
+        Math.abs(Math.log(candidate / value)) < Math.abs(Math.log(best / value)) ? candidate : best
+      );
+    }
+
+    function loadPreset() {
+      pairList.forEach(({ i, j }) => {
+        const ratio = criteria[i].suggested / criteria[j].suggested;
+        document.getElementById(`pair-${i}-${j}`).value = nearestSaaty(ratio);
+      });
+      compute();
+    }
+
+    function compute() {
+      const n = criteria.length;
+      const matrix = Array.from({ length: n }, () => Array(n).fill(1));
+      pairList.forEach(({ i, j }) => {
+        const value = Number(document.getElementById(`pair-${i}-${j}`).value);
+        matrix[i][j] = value; matrix[j][i] = 1 / value;
+      });
+
+      let weights = Array(n).fill(1 / n);
+      for (let iteration = 0; iteration < 1000; iteration++) {
+        const next = matrix.map(row => row.reduce((sum, value, column) => sum + value * weights[column], 0));
+        const total = next.reduce((sum, value) => sum + value, 0);
+        weights = next.map(value => value / total);
+      }
+      const aw = matrix.map(row => row.reduce((sum, value, column) => sum + value * weights[column], 0));
+      const lambdaMax = aw.reduce((sum, value, i) => sum + value / weights[i], 0) / n;
+      const ci = (lambdaMax - n) / (n - 1);
+      const cr = ci / 1.45; // Saaty random index for a 9x9 matrix
+      const groups = { Acoustic: 0, Communication: 0 };
+      weights.forEach((weight, i) => groups[criteria[i].group] += weight);
+      const rows = criteria.map((item, i) =>
+        `<tr><td>${item.label}</td><td>${item.group}</td><td>${(weights[i] * 100).toFixed(2)}%</td></tr>`
+      ).join('');
+      const status = cr < 0.10
+        ? '<span class="good">Acceptable (CR &lt; 0.10)</span>'
+        : '<span class="bad">Review comparisons (CR >= 0.10)</span>';
+      document.getElementById('result').innerHTML = `
+        <h2>Results</h2>
+        <p><strong>Consistency Ratio:</strong> ${cr.toFixed(4)} - ${status}</p>
+        <p><strong>Acoustic total:</strong> ${(groups.Acoustic * 100).toFixed(2)}% &nbsp; <strong>Communication total:</strong> ${(groups.Communication * 100).toFixed(2)}%</p>
+        <table><thead><tr><th>Parameter</th><th>Group</th><th>AHP weight</th></tr></thead><tbody>${rows}</tbody></table>`;
+    }
+
+    document.getElementById('preset').addEventListener('click', loadPreset);
+    document.getElementById('compute').addEventListener('click', compute);
+    loadPreset();
+  </script>
+</body>
+</html>

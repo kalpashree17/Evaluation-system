@@ -1,13 +1,13 @@
 """
-Acoustic Confidence — 70 % of the final score.
+Acoustic Confidence — 65 % of the final score.
 
 Five objective, signal-derived pillars:
 
-    1. Speech Rate           (25 %)
-    2. Pause Score           (20 %)
-    3. Pitch Variation       (10 %)
+    1. Speech Rate           (20 %)
+    2. Pause Score           (17 %)
+    3. Pitch Variation       (12 %)
     4. Energy Stability      (10 %)
-    5. Silence Ratio          (5 %)
+    5. Silence Ratio          (6 %)
 
 Internal weights are relative (sum to 1.0 within this tier).
 """
@@ -142,11 +142,11 @@ def silence_ratio_score(pause_info: dict) -> float:
 
 # Internal weights for the 5 acoustic pillars (must sum to 1.0)
 _ACOUSTIC_WEIGHTS = {
-    "speech_rate":   0.25 / 0.70,   # 25/70 normalised
-    "pause_score":   0.20 / 0.70,
-    "pitch_var":     0.10 / 0.70,
-    "energy_stab":   0.10 / 0.70,
-    "silence_ratio": 0.05 / 0.70,
+    "speech_rate":   0.20 / 0.65,   # 20/65 normalised
+    "pause_score":   0.17 / 0.65,   # 17/65 normalised
+    "pitch_var":     0.12 / 0.65,   # 12/65 normalised
+    "energy_stab":   0.10 / 0.65,   # 10/65 normalised
+    "silence_ratio": 0.06 / 0.65,   #  6/65 normalised
 }
 
 

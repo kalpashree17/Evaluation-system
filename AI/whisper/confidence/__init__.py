@@ -1,15 +1,7 @@
-"""
-Two-tier speaker confidence scoring system.
+"""Two-tier speaker confidence scoring system.
 
-    Tier 1 — Acoustic Confidence  (70 %)
-        Objective signal measurements: speech rate, pauses, pitch,
-        energy, silence ratio.
-
-    Tier 2 — Human Communication Layer  (30 %)
-        Linguistic modifier: filler behaviour, lexical certainty,
-        fluency, response organization.
-
-    Final = Acoustic + (Communication − Acoustic) × 0.30
+The final score is a 65% acoustic-delivery score and a 35%
+communication-quality score.
 """
 
 from .fusion import analyze_audio_confidence

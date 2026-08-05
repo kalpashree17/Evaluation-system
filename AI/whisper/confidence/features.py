@@ -7,6 +7,7 @@ Functions here return raw numerical arrays / dicts — no scoring logic.
 from __future__ import annotations
 
 import numpy as np
+from scipy.signal import medfilt
 
 from .preprocessing import HOP_MS
 
@@ -71,8 +72,9 @@ def _estimate_pitch(frame: np.ndarray, sr: int) -> float:
 
 
 def extract_pitch_contour(frames: np.ndarray, sr: int) -> np.ndarray:
-    """Return F0 (Hz) for every frame.  0 = unvoiced."""
-    return np.array([_estimate_pitch(f, sr) for f in frames])
+    """Return median-smoothed F0 (Hz) for every frame.  0 = unvoiced."""
+    f0 = np.array([_estimate_pitch(f, sr) for f in frames])
+    return medfilt(f0, kernel_size=5) if len(f0) >= 5 else f0
 
 
 # ── Energy / Amplitude ──────────────────────────────────────────────────────
@@ -206,7 +208,10 @@ def detect_pauses(energy: np.ndarray, sr: int) -> dict:
         longest_pause_ms:     duration of longest silent segment in ms
     """
     frame_duration_ms = HOP_MS
-    is_silent = energy < (10 ** (SILENCE_DB_THRESHOLD / 20))
+    energy_db = 20 * np.log10(np.maximum(energy, 1e-12))
+    noise_floor_db = np.percentile(energy_db, 20)
+    threshold_db = np.clip(noise_floor_db + 6.0, -50.0, -20.0)
+    is_silent = energy_db < threshold_db
 
     if not np.any(is_silent):
         return {
