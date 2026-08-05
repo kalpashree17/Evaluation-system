@@ -1,25 +1,30 @@
-
 import fs from "fs";
+import { ApiError } from "../utils/ApiError.js";
 
-// Contract A — Backend -> Whisper/STT service.
-export const transcribeAudio = async (audioFilePath) => {
-  if (!process.env.STT_SERVICE_URL) {
-    console.warn("⚠️ STT_SERVICE_URL is not configured. Returning stub response.");
-
-    return {
-      transcript_text: "[stub transcript — STT_SERVICE_URL is not configured yet]",
-      confidence_score: 0.75,
-    };
+const validateSttResponse = (payload) => {
+  if (!payload || typeof payload !== "object" || typeof payload.transcript_text !== "string") {
+    throw new ApiError(502, "Whisper service returned an invalid transcription response");
   }
 
-  console.log("=======================================");
-  console.log("🎤 Starting Speech-to-Text");
-  console.log("📍 STT URL:", process.env.STT_SERVICE_URL);
-  console.log("📁 Audio File:", audioFilePath);
-  console.log("=======================================");
+  if (payload.confidence_score !== null && payload.confidence_score !== undefined) {
+    const confidence = Number(payload.confidence_score);
+    if (!Number.isFinite(confidence) || confidence < 0 || confidence > 1) {
+      throw new ApiError(502, "Whisper service returned an invalid confidence score");
+    }
+    payload.confidence_score = confidence;
+  }
+
+  return payload;
+};
+
+// Backend -> Whisper: multipart/form-data field "audio".
+// Whisper -> Backend: { transcript_text: string, confidence_score: number | null }.
+export const transcribeAudio = async (audioFilePath) => {
+  if (!process.env.STT_SERVICE_URL) {
+    throw new ApiError(503, "STT_SERVICE_URL is not configured");
+  }
 
   const audioBuffer = fs.readFileSync(audioFilePath);
-
   const form = new FormData();
   form.append("audio", new Blob([audioBuffer]), "answer.webm");
 
@@ -28,23 +33,10 @@ export const transcribeAudio = async (audioFilePath) => {
     body: form,
   });
 
-  console.log("📡 STT Response Status:", response.status);
-
   if (!response.ok) {
     const errorText = await response.text();
-
-    console.error("❌ Whisper Error:");
-    console.error(errorText);
-
-    throw new Error(
-      `STT service responded with ${response.status}: ${errorText}`
-    );
+    throw new ApiError(502, `Whisper service responded with ${response.status}: ${errorText}`);
   }
 
-  const data = await response.json();
-
-  console.log("✅ Whisper Response:");
-  console.log(JSON.stringify(data, null, 2));
-
-  return data;
+  return validateSttResponse(await response.json());
 };

@@ -188,7 +188,7 @@ value: <the recorded blob/file>
 
 Notes on what changed from before:
 - `confidence_score` is **not** inside `evaluation` — it lives under its own `transcription` block along with a ready-to-display `message`. It's about audio clarity, not answer quality, so it's kept separate on purpose.
-- `evaluation` now also includes `matched_keywords`, `missing_keywords`, and `negated_keywords` — these were missing from the old doc.
+- `evaluation` now also includes `matched_keywords`, `missing_keywords`, and `negated_keywords` — these were missing from the old doc. 
 - `next_question.id` is a plain integer, not a uuid.
 - `next_question` can be `null` if there are no questions left across any selected skill — that's your signal to stop the loop and prompt the user to end the interview, instead of calling the endpoint again.
 - If you `POST` to an already-answered `questionId` (e.g. duplicate submit / retry), you get a different shape instead: `{ "message": "This question has already been answered. Continuing with the next question.", "next_question": {...} }` — no `evaluation` or `transcription` in that case, since nothing new was scored.
