@@ -939,13 +939,6 @@ export const AIInterviewEvaluation = () => {
     }
   };
 
-  // ===== EXPLICIT STOP BUTTON =====
-  const handleStopClick = () => {
-    if (isRecording) {
-      stopRecording();
-    }
-  };
-
   // ===== END INTERVIEW EARLY =====
   const handleEndEarly = () => {
     if (isRecording) {
@@ -1197,19 +1190,6 @@ export const AIInterviewEvaluation = () => {
               )}
             </div>
           </button>
-
-          {isRecording && (
-            <button
-              onClick={handleStopClick}
-              className="group cursor-pointer bg-transparent border-0 flex flex-col items-center gap-1.5"
-              aria-label="Stop recording"
-            >
-              <div className="w-12 h-12 rounded-full bg-[#141928] border border-[#2a3654] flex items-center justify-center shadow-lg group-hover:border-rose-500/50 group-hover:bg-[#1a2033] transition-all duration-200">
-                <span className="w-3.5 h-3.5 rounded-[3px] bg-rose-500 group-hover:bg-rose-400 transition-colors" />
-              </div>
-              <span className="text-[11px] text-slate-500 group-hover:text-rose-400 transition-colors">Stop</span>
-            </button>
-          )}
         </div>
 
         <div className="text-center">
@@ -1225,7 +1205,7 @@ export const AIInterviewEvaluation = () => {
           ) : (
             <div>
               <p className="text-slate-300 text-sm font-medium mb-1">Click the microphone to answer</p>
-              <p className="text-slate-500 text-xs">Speak freely — click Stop when you're done</p>
+              <p className="text-slate-500 text-xs">Speak freely — click the mic again to stop</p>
             </div>
           )}
         </div>
