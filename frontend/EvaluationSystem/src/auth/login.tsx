@@ -1,6 +1,12 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { message } from 'antd';
 import { useAuth } from '../context/authContext';
+
+function getErrorMessage(err: unknown, fallback: string): string {
+  const data = (err as { response?: { data?: { message?: string } } } | null)?.response?.data;
+  return data?.message || fallback;
+}
 
 const Login: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -20,6 +26,9 @@ const Login: React.FC = () => {
     try {
       const { user } = await login(email, password);
 
+      // Show login success notification
+      message.success('Login successful!');
+
       // Role-based redirect after successful login
       switch (user.role) {
         case 'admin':
@@ -31,8 +40,8 @@ const Login: React.FC = () => {
         default:
           navigate('/dashboard');
       }
-    } catch (err: any) {
-      setError(err?.response?.data?.message || 'Login failed');
+    } catch (err) {
+      setError(getErrorMessage(err, 'Login failed'));
     } finally {
       setLoading(false);
     }
@@ -44,10 +53,10 @@ const Login: React.FC = () => {
         <div className="bg-[#141928] border border-[#1e2943] rounded-2xl p-8">
           <div className="text-center mb-8">
             <div className="w-16 h-16 rounded-2xl bg-linear-to-br from-violet-500 to-indigo-600 flex items-center justify-center mx-auto mb-4">
-              <span className="text-white text-2xl font-bold">IQ</span>
+              <span className="text-white text-2xl font-bold">PW</span>
             </div>
             <h1 className="text-white text-2xl font-bold">Welcome Back</h1>
-            <p className="text-slate-400 mt-1">Sign in to continue to InterviewIQ</p>
+            <p className="text-slate-400 mt-1">Sign in to continue to PrepWise</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">

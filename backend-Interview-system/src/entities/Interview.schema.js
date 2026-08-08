@@ -1,3 +1,6 @@
+
+
+
 import { EntitySchema } from "typeorm";
 
 export const STARTING_LEVELS = ["easy", "mid", "expert"];
@@ -8,9 +11,9 @@ export const Interview = new EntitySchema({
   tableName: "interviews",
   columns: {
     id: {
-      type: "uuid",
+      type: "int",
       primary: true,
-      generated: "uuid",
+      generated: true, // auto-increment (SERIAL): 1, 2, 3...
     },
     startingLevel: {
       type: "enum",
@@ -18,6 +21,10 @@ export const Interview = new EntitySchema({
       enumName: "starting_level",
       name: "starting_level",
     },
+    // NOTE: this column is now a bit vestigial since difficulty is tracked
+    // per-skill in InterviewSkillProgress. Kept for backward compatibility /
+    // as the "seed" difficulty value at creation time. Not updated after
+    // interview start — read from InterviewSkillProgress for live values.
     currentDifficulty: {
       type: "decimal",
       precision: 3,
@@ -43,10 +50,20 @@ export const Interview = new EntitySchema({
       joinColumn: { name: "user_id" },
       onDelete: "CASCADE",
     },
-    skill: {
-      type: "many-to-one",
+
+    skills: {
+      type: "many-to-many",
       target: "Skill",
-      joinColumn: { name: "skill_id" },
+      joinTable: {
+        name: "interview_skills",
+        joinColumn: { name: "interview_id", referencedColumnName: "id" },
+        inverseJoinColumn: { name: "skill_id", referencedColumnName: "id" },
+      },
+    },
+    skillProgress: {
+      type: "one-to-many",
+      target: "InterviewSkillProgress",
+      inverseSide: "interview",
     },
   },
 });

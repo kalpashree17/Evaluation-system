@@ -1,7 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import {
   Button,
-  Select,
   message,
   Progress,
   Tag,
@@ -18,7 +17,9 @@ import {
   ArrowRightOutlined,
   AudioOutlined,
   AudioFilled,
-  SoundOutlined,
+  TrophyOutlined,
+  PoweroffOutlined,
+  ReloadOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import api from "../utils/axiosInstance";
@@ -26,9 +27,10 @@ import api from "../utils/axiosInstance";
 // ==================== INTERFACES ====================
 
 interface BackendQuestion {
-  id: string;
+  id: number;
   question_text: string;
   difficulty_level: number;
+  skill_id?: number;
 }
 
 interface BackendSkill {
@@ -36,41 +38,66 @@ interface BackendSkill {
   name: string;
 }
 
-interface AnswerEvaluation {
+interface TranscriptionInfo {
   confidence_score: number;
+  message: string;
+}
+
+interface AnswerEvaluation {
   keyword_score: number;
   tfidf_score: number;
   semantic_score: number;
   final_score: number;
+  matched_keywords: string[];
+  missing_keywords: string[];
+  negated_keywords: string[];
   strengths: string[];
   weaknesses: string[];
   areas_for_improvement: string[];
 }
 
 interface AnswerResponse {
-  evaluation: AnswerEvaluation;
+  transcription?: TranscriptionInfo;
+  evaluation?: AnswerEvaluation;
   next_question: BackendQuestion | null;
+  message?: string;
 }
 
 interface InterviewStartResponse {
-  interview_id: string;
+  interview_id: number;
   question: BackendQuestion;
 }
 
 interface InterviewEndResponse {
-  interview_id: string;
-  total_questions_answered: number;
+  interview_id: number;
+  status: string;
+}
+
+interface ReportQuestion {
+  order_index: number;
+  question_text: string;
+  difficulty_level: number;
+  transcript_text: string | null;
+  confidence_score: number | null;
+  final_score: number | null;
+  strengths: string[];
+  weaknesses: string[];
+  areas_for_improvement: string[];
+}
+
+interface SkillReport {
+  skill: string;
+  final_difficulty_reached: number;
+  assessed_level: string;
+  average_score_at_that_level: number | null;
   average_confidence_score: number | null;
-  average_keyword_score: number | null;
-  average_tfidf_score: number | null;
-  average_semantic_score: number | null;
-  average_final_score: number | null;
-  per_question_scores: {
-    order_index: number;
-    question_text: string;
-    difficulty_level: number;
-    final_score: number | null;
-  }[];
+  questions_asked: number;
+  questions: ReportQuestion[];
+}
+
+interface InterviewReport {
+  interview_id: number;
+  skills: SkillReport[];
 }
 
 interface EvaluationCriteria {
@@ -90,6 +117,10 @@ interface EvaluationResult {
   recommendations: string[];
   strengths: string[];
   weaknesses: string[];
+  matchedKeywords: string[];
+  missingKeywords: string[];
+  negatedKeywords: string[];
+  transcriptionMessage: string;
 }
 
 interface Message {
@@ -101,24 +132,29 @@ interface Message {
   evaluation?: EvaluationResult;
 }
 
-
-
 const STARTING_LEVEL_OPTIONS = [
   { label: "Easy", value: "easy" },
   { label: "Mid", value: "mid" },
   { label: "Expert", value: "expert" },
 ];
 
-const difficultyToLabel = (level: number): "easy" | "medium" | "hard" => {
-  if (level <= 0.33) return "easy";
-  if (level <= 0.66) return "medium";
-  return "hard";
+// Bucket a 0–1 difficulty float into a label: < 0.35 easy, 0.35–0.65 mid, > 0.65 expert.
+const difficultyToLabel = (level: number): "easy" | "mid" | "expert" => {
+  if (level < 0.35) return "easy";
+  if (level <= 0.65) return "mid";
+  return "expert";
 };
 
 const difficultyToColor = (level: number): string => {
   const label = difficultyToLabel(level);
   if (label === "easy") return "green";
-  if (label === "medium") return "gold";
+  if (label === "mid") return "gold";
+  return "magenta";
+};
+
+const levelToColor = (level: string): string => {
+  if (level === "easy") return "green";
+  if (level === "mid") return "gold";
   return "magenta";
 };
 
@@ -133,6 +169,32 @@ function stopMediaTracks(stream: MediaStream | null) {
 function closeAudioContext(ctx: AudioContext | null) {
   if (!ctx) return;
   ctx.close().catch(() => {});
+}
+
+interface ApiErrorLike {
+  response?: { data?: { message?: string } };
+}
+
+function getErrorMessage(err: unknown, fallback: string): string {
+  return (err as ApiErrorLike | null)?.response?.data?.message || fallback;
+}
+
+function drawRoundedBar(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number
+) {
+  const rectCtx = ctx as CanvasRenderingContext2D & {
+    roundRect?: (x: number, y: number, w: number, h: number, r: number) => void;
+  };
+  if (typeof rectCtx.roundRect === "function") {
+    rectCtx.roundRect(x, y, w, h, r);
+  } else {
+    ctx.rect(x, y, w, h);
+  }
 }
 
 // ==================== WAV ENCODER ====================
@@ -173,24 +235,24 @@ function encodeWav(samples: Float32Array, sampleRate: number): ArrayBuffer {
   let offset = 44;
   for (let i = 0; i < samples.length; i++) {
     const s = Math.max(-1, Math.min(1, samples[i]));
-    view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+    view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7fff, true);
     offset += 2;
   }
 
   return buffer;
 }
 
-
+// ==================== SETUP SCREEN ====================
 
 const SetupScreen = ({
   onStart,
   loading,
 }: {
-  onStart: (skillId: number, startingLevel: string) => void;
+  onStart: (skillIds: number[], startingLevel: string) => void;
   loading: boolean;
 }) => {
   const [skillOptions, setSkillOptions] = useState<BackendSkill[]>([]);
-  const [selectedSkillId, setSelectedSkillId] = useState<number | null>(null);
+  const [selectedSkillIds, setSelectedSkillIds] = useState<number[]>([]);
   const [startingLevel, setStartingLevel] = useState<string>("easy");
 
   useEffect(() => {
@@ -205,12 +267,18 @@ const SetupScreen = ({
     fetchSkills();
   }, []);
 
+  const toggleSkill = (id: number) => {
+    setSelectedSkillIds((prev) =>
+      prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]
+    );
+  };
+
   const handleStart = () => {
-    if (!selectedSkillId) {
-      message.warning("Please select a skill");
+    if (selectedSkillIds.length === 0) {
+      message.warning("Please select at least one skill");
       return;
     }
-    onStart(selectedSkillId, startingLevel);
+    onStart(selectedSkillIds, startingLevel);
   };
 
   return (
@@ -234,30 +302,54 @@ const SetupScreen = ({
 
           <div className="space-y-5">
             <div>
-              <label className="block text-xs uppercase tracking-wider text-slate-400 mb-1.5 font-medium">
-                Skill
+              <label className="block text-xs uppercase tracking-wider text-slate-400 mb-2 font-medium">
+                Select skills
               </label>
-              <Select
-                value={selectedSkillId}
-                onChange={(value) => setSelectedSkillId(value)}
-                size="large"
-                placeholder="Select a skill"
-                className="w-full! bg-[#0d1221]! border! border-[#1e2943]! text-white! placeholder-slate-600! px-4! py-2.5! rounded-xl! text-sm! outline-none! focus:border-violet-500/50! transition-colors!"
-                options={skillOptions.map((s) => ({ label: s.name, value: s.id }))}
-              />
+              <div className="flex flex-wrap gap-2">
+                {skillOptions.map((skill) => {
+                  const active = selectedSkillIds.includes(skill.id);
+                  return (
+                    <button
+                      key={skill.id}
+                      type="button"
+                      onClick={() => toggleSkill(skill.id)}
+                      className={`px-4 py-2 rounded-xl text-sm font-medium border transition-all cursor-pointer ${
+                        active
+                          ? "bg-violet-600/20 border-violet-500 text-white shadow-lg shadow-violet-500/20"
+                          : "bg-[#0d1221] border-[#1e2943] text-slate-400 hover:border-violet-500/50 hover:text-slate-200"
+                      }`}
+                    >
+                      {skill.name}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-[11px] text-slate-500 mt-2">Pick any number of skills</p>
             </div>
 
             <div>
-              <label className="block text-xs uppercase tracking-wider text-slate-400 mb-1.5 font-medium">
-                Starting level
+              <label className="block text-xs uppercase tracking-wider text-slate-400 mb-2 font-medium">
+                Difficulty
               </label>
-              <Select
-                value={startingLevel}
-                onChange={(value) => setStartingLevel(value)}
-                size="large"
-                className="w-full! bg-[#0d1221]! border! border-[#1e2943]! text-white! placeholder-slate-600! px-4! py-2.5! rounded-xl! text-sm! outline-none! focus:border-violet-500/50! transition-colors!"
-                options={STARTING_LEVEL_OPTIONS}
-              />
+              <div className="grid grid-cols-3 gap-2">
+                {STARTING_LEVEL_OPTIONS.map((opt) => {
+                  const active = startingLevel === opt.value;
+                  return (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setStartingLevel(opt.value)}
+                      className={`px-3 py-2.5 rounded-xl text-sm font-semibold border transition-all cursor-pointer capitalize ${
+                        active
+                          ? "bg-linear-to-br from-violet-600 to-indigo-600 border-violet-500 text-white shadow-lg shadow-violet-500/20"
+                          : "bg-[#0d1221] border-[#1e2943] text-slate-400 hover:border-violet-500/50 hover:text-slate-200"
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             <Button
@@ -279,17 +371,200 @@ const SetupScreen = ({
   );
 };
 
+// ==================== REPORT SCREEN ====================
+
+const ReportScreen = ({
+  report,
+  onRestart,
+}: {
+  report: InterviewReport;
+  onRestart: () => void;
+}) => {
+  const allQuestions = report.skills.flatMap((s) => s.questions);
+  const answered = allQuestions.filter((q) => q.final_score != null);
+  const overallAvg =
+    answered.length > 0
+      ? answered.reduce((acc, q) => acc + (q.final_score ?? 0), 0) / answered.length
+      : null;
+
+  return (
+    <div className="max-w-3xl mx-auto space-y-6 pb-8">
+      <div className="bg-[#141928] border border-[#1e2943] rounded-2xl p-6 shadow-lg">
+        <div className="flex items-center gap-3 mb-5">
+          <div className="w-9 h-9 rounded-xl bg-linear-to-br from-violet-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-violet-500/20">
+            <TrophyOutlined className="text-white text-sm" />
+          </div>
+          <h2 className="text-white font-bold text-base">Interview Report</h2>
+          <Badge count={`#${report.interview_id}`} color="#7c3aed" />
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="bg-[#0d1221] border border-[#1e2943] rounded-xl p-3">
+            <div className="text-[11px] uppercase tracking-wider text-slate-500 mb-1">Skills</div>
+            <div className="text-white font-semibold text-lg">{report.skills.length}</div>
+          </div>
+          <div className="bg-[#0d1221] border border-[#1e2943] rounded-xl p-3">
+            <div className="text-[11px] uppercase tracking-wider text-slate-500 mb-1">Questions</div>
+            <div className="text-white font-semibold text-lg">{allQuestions.length}</div>
+          </div>
+          <div className="bg-[#0d1221] border border-[#1e2943] rounded-xl p-3">
+            <div className="text-[11px] uppercase tracking-wider text-slate-500 mb-1">Answered</div>
+            <div className="text-white font-semibold text-lg">{answered.length}</div>
+          </div>
+          <div className="bg-[#0d1221] border border-[#1e2943] rounded-xl p-3">
+            <div className="text-[11px] uppercase tracking-wider text-slate-500 mb-1">Avg score</div>
+            <div className="text-white font-semibold text-lg">
+              {overallAvg != null ? `${Math.round(overallAvg * 100)}%` : "—"}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {report.skills.map((skill) => (
+        <div key={skill.skill} className="bg-[#141928] border border-[#1e2943] rounded-2xl p-6 shadow-lg">
+          <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-linear-to-br from-violet-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-violet-500/20">
+                <BarChartOutlined className="text-white text-sm" />
+              </div>
+              <div>
+                <h3 className="text-white font-bold text-base">{skill.skill}</h3>
+                <p className="text-xs text-slate-500">
+                  Final difficulty reached: {Math.round(skill.final_difficulty_reached * 100)}%
+                </p>
+              </div>
+            </div>
+            <Tag color={levelToColor(skill.assessed_level)} className="!text-xs !px-2 !py-0.5 !border-0 !font-semibold !uppercase">
+              {skill.assessed_level}
+            </Tag>
+          </div>
+
+          <div className="grid grid-cols-3 gap-3 mb-5">
+            <div className="bg-[#0d1221] border border-[#1e2943] rounded-xl p-3">
+              <div className="text-[11px] uppercase tracking-wider text-slate-500 mb-1">Avg score</div>
+              <div className="text-white font-semibold">
+                {skill.average_score_at_that_level != null
+                  ? `${Math.round(skill.average_score_at_that_level * 100)}%`
+                  : "—"}
+              </div>
+            </div>
+            <div className="bg-[#0d1221] border border-[#1e2943] rounded-xl p-3">
+              <div className="text-[11px] uppercase tracking-wider text-slate-500 mb-1">Avg confidence</div>
+              <div className="text-white font-semibold">
+                {skill.average_confidence_score != null
+                  ? `${Math.round(skill.average_confidence_score * 100)}%`
+                  : "—"}
+              </div>
+            </div>
+            <div className="bg-[#0d1221] border border-[#1e2943] rounded-xl p-3">
+              <div className="text-[11px] uppercase tracking-wider text-slate-500 mb-1">Asked</div>
+              <div className="text-white font-semibold">{skill.questions_asked}</div>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            {skill.questions.map((q) => {
+              const scored = q.final_score != null;
+              return (
+                <div key={q.order_index} className="bg-[#0d1221] border border-[#1e2943] rounded-xl p-4">
+                  <div className="flex items-center gap-2 mb-1 flex-wrap">
+                    <Tag color="geekblue" className="!text-[11px] !px-2 !py-0 !border-0">
+                      Q{q.order_index}
+                    </Tag>
+                    <Tag color={difficultyToColor(q.difficulty_level)} className="!text-[11px] !px-2 !py-0 !border-0">
+                      {difficultyToLabel(q.difficulty_level)}
+                    </Tag>
+                    <span className="ml-auto text-xs font-semibold text-white">
+                      {scored ? `${Math.round((q.final_score ?? 0) * 100)}%` : "Not answered"}
+                    </span>
+                  </div>
+                  <p className="text-sm text-slate-300 leading-relaxed mb-2">{q.question_text}</p>
+
+                  {scored && q.transcript_text && (
+                    <div className="mb-2">
+                      <span className="text-[11px] uppercase tracking-wider text-slate-500">Your answer</span>
+                      <p className="text-xs text-slate-400 italic mt-0.5">"{q.transcript_text}"</p>
+                    </div>
+                  )}
+
+                  {scored && (
+                    <div className="grid grid-cols-2 gap-4 mt-2">
+                      {q.strengths.length > 0 && (
+                        <div>
+                          <span className="text-emerald-400 text-[11px] font-medium">Strengths</span>
+                          <ul className="text-xs text-slate-400 mt-1 space-y-0.5">
+                            {q.strengths.map((s, i) => (
+                              <li key={i} className="flex items-start gap-1.5">
+                                <span className="text-emerald-500 mt-0.5">✓</span>
+                                <span>{s}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      {q.weaknesses.length > 0 && (
+                        <div>
+                          <span className="text-rose-400 text-[11px] font-medium">Areas to improve</span>
+                          <ul className="text-xs text-slate-400 mt-1 space-y-0.5">
+                            {q.weaknesses.map((w, i) => (
+                              <li key={i} className="flex items-start gap-1.5">
+                                <span className="text-rose-500 mt-0.5">✗</span>
+                                <span>{w}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {scored && q.areas_for_improvement.length > 0 && (
+                    <div className="mt-2">
+                      <span className="text-amber-400 text-[11px] font-medium">Recommendations</span>
+                      <ul className="text-xs text-slate-400 mt-1 space-y-0.5">
+                        {q.areas_for_improvement.map((r, i) => (
+                          <li key={i} className="flex items-start gap-1.5">
+                            <span className="text-violet-500 mt-0.5">→</span>
+                            <span>{r}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+
+      <Button
+        type="primary"
+        size="large"
+        block
+        icon={<ReloadOutlined />}
+        onClick={onRestart}
+        className="!bg-linear-to-r !from-violet-600 !to-indigo-600 !border-0 !rounded-xl !h-11 !font-semibold !shadow-lg !shadow-violet-500/20"
+      >
+        Start a new interview
+      </Button>
+    </div>
+  );
+};
+
 // ==================== MAIN COMPONENT ====================
 
 export const AIInterviewEvaluation = () => {
   // ===== STATE =====
   const [messages, setMessages] = useState<Message[]>([]);
-  const [interviewId, setInterviewId] = useState<string | null>(null);
+  const [interviewId, setInterviewId] = useState<number | null>(null);
   const [currentQuestion, setCurrentQuestion] = useState<BackendQuestion | null>(null);
   const [questionCount, setQuestionCount] = useState(0);
   const [evaluationResult, setEvaluationResult] = useState<EvaluationResult | null>(null);
   const [showEvaluation, setShowEvaluation] = useState(false);
   const [sessionComplete, setSessionComplete] = useState(false);
+  const [report, setReport] = useState<InterviewReport | null>(null);
+  const [endingInterview, setEndingInterview] = useState(false);
 
   // ===== COUNTDOWN STATE =====
   const [showCountdown, setShowCountdown] = useState(false);
@@ -307,13 +582,11 @@ export const AIInterviewEvaluation = () => {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const questionStartRef = useRef<number>(0);
 
-
   const audioContextRef = useRef<AudioContext | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const rawPcmRef = useRef<Float32Array[]>([]);
   const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const sampleRateRef = useRef<number>(48000);
-
 
   const analyserRef = useRef<AnalyserNode | null>(null);
   const waveformCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -337,7 +610,6 @@ export const AIInterviewEvaluation = () => {
     analyserRef.current = null;
   };
 
- 
   const drawWaveform = () => {
     const analyser = analyserRef.current;
     const canvas = waveformCanvasRef.current;
@@ -383,11 +655,7 @@ export const AIInterviewEvaluation = () => {
 
       const radius = Math.min(barWidth / 2, 3);
       ctx.beginPath();
-      if (typeof (ctx as any).roundRect === "function") {
-        (ctx as any).roundRect(x, y, barWidth, barHeight, radius);
-      } else {
-        ctx.rect(x, y, barWidth, barHeight);
-      }
+      drawRoundedBar(ctx, x, y, barWidth, barHeight, radius);
       ctx.fill();
     }
 
@@ -424,6 +692,9 @@ export const AIInterviewEvaluation = () => {
       streamRef.current = stream;
 
       const audioCtx = new AudioContext();
+      if (audioCtx.state === "suspended") {
+        await audioCtx.resume();
+      }
       audioContextRef.current = audioCtx;
       sampleRateRef.current = audioCtx.sampleRate;
 
@@ -462,6 +733,41 @@ export const AIInterviewEvaluation = () => {
     }
   };
 
+  // ===== END INTERVIEW + FETCH REPORT =====
+  const finalizeInterview = async () => {
+    if (!interviewId || endingInterview) return;
+    setEndingInterview(true);
+
+    try {
+      // POST /api/interviews/:id/end
+      const endResponse = await api.post<InterviewEndResponse>(`/api/interviews/${interviewId}/end`);
+      const endData = endResponse.data;
+
+      // GET /api/interviews/:id/report
+      const reportResponse = await api.get<InterviewReport>(`/api/interviews/${interviewId}/report`);
+      const reportData = reportResponse.data;
+
+      setReport(reportData);
+      setSessionComplete(true);
+      setPhase("idle");
+
+      const completeMessage: Message = {
+        id: nextId("complete"),
+        type: "system",
+        content: `Interview complete (${endData.status}). Your report is ready.`,
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, completeMessage]);
+    } catch (err) {
+      console.error("Failed to end interview:", err);
+      message.error("Failed to finalize the interview. Please try again.");
+      setSessionComplete(true);
+      setPhase("idle");
+    } finally {
+      setEndingInterview(false);
+    }
+  };
+
   // ===== STOP RECORDING =====
   const stopRecording = async () => {
     if (recordingTimerRef.current) {
@@ -493,7 +799,27 @@ export const AIInterviewEvaluation = () => {
       offset += chunk.length;
     }
 
+    // ── TEMP DIAGNOSTIC: log RMS/peak so we can verify the mic captured audio ──
     const sampleRate = sampleRateRef.current;
+    let sumSq = 0;
+    let peak = 0;
+    for (let i = 0; i < combined.length; i++) {
+      const v = combined[i];
+      sumSq += v * v;
+      const abs = Math.abs(v);
+      if (abs > peak) peak = abs;
+    }
+    const rms = Math.sqrt(sumSq / combined.length);
+    console.log(
+      `[recording-diagnostic] samples=${combined.length} duration=${(combined.length / sampleRate).toFixed(2)}s sampleRate=${sampleRate} rms=${rms.toFixed(4)} peak=${peak.toFixed(4)}`
+    );
+    if (rms < 0.005) {
+      message.warning(
+        "Recording appears silent — the microphone may not be picking up audio."
+      );
+    }
+    // ── END TEMP DIAGNOSTIC ──
+
     const wavBuffer = encodeWav(combined, sampleRate);
     const wavBlob = new Blob([wavBuffer], { type: "audio/wav" });
 
@@ -507,57 +833,72 @@ export const AIInterviewEvaluation = () => {
       const formData = new FormData();
       formData.append("audio", wavBlob, "answer.wav");
 
-      const response = await api.post(
+      const response = await api.post<AnswerResponse>(
         `/api/questions/${currentQuestion!.id}/answer`,
         formData,
         { headers: { "Content-Type": "multipart/form-data" } }
       );
 
-      const answerResult: AnswerResponse = response.data;
+      const answerResult = response.data;
 
-      const evalResult: EvaluationResult = {
-        overallScore: Math.round(answerResult.evaluation.final_score * 10),
-        maxScore: 10,
-        criteria: [
-          {
-            category: "Confidence",
-            score: Math.round(answerResult.evaluation.confidence_score * 10),
-            maxScore: 10,
-            feedback: `Confidence score: ${(answerResult.evaluation.confidence_score * 100).toFixed(0)}%`,
-            strengths: [],
-            areasForImprovement: [],
-          },
-          {
-            category: "Keyword Match",
-            score: Math.round(answerResult.evaluation.keyword_score * 10),
-            maxScore: 10,
-            feedback: `Keyword score: ${(answerResult.evaluation.keyword_score * 100).toFixed(0)}%`,
-            strengths: [],
-            areasForImprovement: [],
-          },
-          {
-            category: "Semantic",
-            score: Math.round(answerResult.evaluation.semantic_score * 10),
-            maxScore: 10,
-            feedback: `Semantic score: ${(answerResult.evaluation.semantic_score * 100).toFixed(0)}%`,
-            strengths: [],
-            areasForImprovement: [],
-          },
-        ],
-        summary: `You spoke for ${timeSpent} seconds.`,
-        recommendations: answerResult.evaluation.areas_for_improvement,
-        strengths: answerResult.evaluation.strengths,
-        weaknesses: answerResult.evaluation.weaknesses,
-      };
+      if (answerResult.transcription && answerResult.evaluation) {
+        const evalResult: EvaluationResult = {
+          overallScore: Math.round(answerResult.evaluation.final_score * 10),
+          maxScore: 10,
+          criteria: [
+            {
+              category: "Confidence",
+              score: Math.round(answerResult.transcription.confidence_score * 10),
+              maxScore: 10,
+              feedback: answerResult.transcription.message,
+              strengths: [],
+              areasForImprovement: [],
+            },
+            {
+              category: "Keyword Match",
+              score: Math.round(answerResult.evaluation.keyword_score * 10),
+              maxScore: 10,
+              feedback: `Keyword score: ${(answerResult.evaluation.keyword_score * 100).toFixed(0)}%`,
+              strengths: [],
+              areasForImprovement: [],
+            },
+            {
+              category: "Semantic",
+              score: Math.round(answerResult.evaluation.semantic_score * 10),
+              maxScore: 10,
+              feedback: `Semantic score: ${(answerResult.evaluation.semantic_score * 100).toFixed(0)}%`,
+              strengths: [],
+              areasForImprovement: [],
+            },
+          ],
+          summary: `You spoke for ${timeSpent} seconds.`,
+          recommendations: answerResult.evaluation.areas_for_improvement,
+          strengths: answerResult.evaluation.strengths,
+          weaknesses: answerResult.evaluation.weaknesses,
+          matchedKeywords: answerResult.evaluation.matched_keywords,
+          missingKeywords: answerResult.evaluation.missing_keywords,
+          negatedKeywords: answerResult.evaluation.negated_keywords,
+          transcriptionMessage: answerResult.transcription.message,
+        };
 
-      const reviewMessage: Message = {
-        id: nextId("review"),
-        type: "system",
-        content: `Answer Review \u2014 Question ${questionCount}`,
-        timestamp: new Date(),
-        evaluation: evalResult,
-      };
-      setMessages((prev) => [...prev, reviewMessage]);
+        const reviewMessage: Message = {
+          id: nextId("review"),
+          type: "system",
+          content: `Answer Review \u2014 Question ${questionCount}`,
+          timestamp: new Date(),
+          evaluation: evalResult,
+        };
+        setMessages((prev) => [...prev, reviewMessage]);
+      } else if (answerResult.message) {
+        // Duplicate submit — no new evaluation, just continue to next question.
+        const noticeMessage: Message = {
+          id: nextId("notice"),
+          type: "system",
+          content: answerResult.message,
+          timestamp: new Date(),
+        };
+        setMessages((prev) => [...prev, noticeMessage]);
+      }
 
       if (answerResult.next_question) {
         const nextQ = answerResult.next_question;
@@ -577,72 +918,9 @@ export const AIInterviewEvaluation = () => {
           questionStartRef.current = Date.now();
         }, 2500);
       } else {
-        // No more questions — end interview
-        setTimeout(async () => {
-          try {
-            const endResponse = await api.post(`/api/interviews/${interviewId}/end`);
-            const endData: InterviewEndResponse = endResponse.data;
-
-            setSessionComplete(true);
-            setPhase("idle");
-
-            const finalEval: EvaluationResult = {
-              overallScore: endData.average_final_score
-                ? Math.round(endData.average_final_score * 10)
-                : 0,
-              maxScore: 10,
-              criteria: [
-                {
-                  category: "Confidence",
-                  score: endData.average_confidence_score
-                    ? Math.round(endData.average_confidence_score * 10)
-                    : 0,
-                  maxScore: 10,
-                  feedback: "Average confidence across all questions",
-                  strengths: [],
-                  areasForImprovement: [],
-                },
-                {
-                  category: "Keyword Match",
-                  score: endData.average_keyword_score
-                    ? Math.round(endData.average_keyword_score * 10)
-                    : 0,
-                  maxScore: 10,
-                  feedback: "Average keyword matching",
-                  strengths: [],
-                  areasForImprovement: [],
-                },
-                {
-                  category: "Semantic",
-                  score: endData.average_semantic_score
-                    ? Math.round(endData.average_semantic_score * 10)
-                    : 0,
-                  maxScore: 10,
-                  feedback: "Average semantic similarity",
-                  strengths: [],
-                  areasForImprovement: [],
-                },
-              ],
-              summary: `Interview complete! You answered ${endData.total_questions_answered} questions.`,
-              recommendations: [],
-              strengths: [],
-              weaknesses: [],
-            };
-
-            setEvaluationResult(finalEval);
-
-            const completeMessage: Message = {
-              id: nextId("complete"),
-              type: "system",
-              content: `Interview complete! You answered ${endData.total_questions_answered} questions.`,
-              timestamp: new Date(),
-            };
-            setMessages((prev) => [...prev, completeMessage]);
-          } catch (err) {
-            console.error("Failed to end interview:", err);
-            setSessionComplete(true);
-            setPhase("idle");
-          }
+        // No more questions — end the interview and fetch the report.
+        setTimeout(() => {
+          finalizeInterview();
         }, 2500);
       }
     } catch (err) {
@@ -661,11 +939,13 @@ export const AIInterviewEvaluation = () => {
     }
   };
 
-  // ===== EXPLICIT STOP BUTTON =====
-  const handleStopClick = () => {
+  // ===== END INTERVIEW EARLY =====
+  const handleEndEarly = () => {
     if (isRecording) {
-      stopRecording();
+      message.warning("Stop recording before ending the interview");
+      return;
     }
+    finalizeInterview();
   };
 
   // ===== CANDIDATE CLICKS MIC ON WELCOME SCREEN =====
@@ -680,17 +960,17 @@ export const AIInterviewEvaluation = () => {
     setCountdownValue(3);
     setPhase("countdown");
 
+    let remaining = 3;
     const interval = setInterval(() => {
-      setCountdownValue((prev) => {
-        if (prev <= 1) {
-          clearInterval(interval);
-          setShowCountdown(false);
-          setPhase("idle");
-          showFirstQuestion();
-          return 0;
-        }
-        return prev - 1;
-      });
+      remaining -= 1;
+      if (remaining <= 0) {
+        clearInterval(interval);
+        setShowCountdown(false);
+        setPhase("idle");
+        showFirstQuestion();
+        return;
+      }
+      setCountdownValue(remaining);
     }, 1000);
   };
 
@@ -712,16 +992,16 @@ export const AIInterviewEvaluation = () => {
   };
 
   // ===== INITIALIZE INTERVIEW (calls POST /api/interviews) =====
-  const initializeInterview = async (skillId: number, startingLevel: string) => {
+  const initializeInterview = async (skillIds: number[], startingLevel: string) => {
     setPhase("starting");
 
     try {
-      const response = await api.post("/api/interviews", {
-        skill_id: skillId,
+      const response = await api.post<InterviewStartResponse>("/api/interviews", {
+        skill_ids: skillIds,
         starting_level: startingLevel,
       });
 
-      const data: InterviewStartResponse = response.data;
+      const data = response.data;
 
       setInterviewId(data.interview_id);
       setCurrentQuestion(data.question);
@@ -729,6 +1009,7 @@ export const AIInterviewEvaluation = () => {
       setSessionComplete(false);
       setShowEvaluation(false);
       setEvaluationResult(null);
+      setReport(null);
 
       const welcomeMessage: Message = {
         id: nextId("welcome"),
@@ -739,12 +1020,24 @@ export const AIInterviewEvaluation = () => {
 
       setMessages([welcomeMessage]);
       setPhase("ready");
-    } catch (err: any) {
+    } catch (err) {
       console.error("Failed to start interview:", err);
-      const errorMsg = err.response?.data?.message || "Failed to start interview";
-      message.error(errorMsg);
+      message.error(getErrorMessage(err, "Failed to start interview"));
       setPhase("idle");
     }
+  };
+
+  // ===== RESTART =====
+  const handleRestart = () => {
+    setInterviewId(null);
+    setCurrentQuestion(null);
+    setQuestionCount(0);
+    setSessionComplete(false);
+    setReport(null);
+    setEvaluationResult(null);
+    setShowEvaluation(false);
+    setMessages([]);
+    setPhase("idle");
   };
 
   // ===== RENDER EVALUATION PANEL =====
@@ -897,19 +1190,6 @@ export const AIInterviewEvaluation = () => {
               )}
             </div>
           </button>
-
-          {isRecording && (
-            <button
-              onClick={handleStopClick}
-              className="group cursor-pointer bg-transparent border-0 flex flex-col items-center gap-1.5"
-              aria-label="Stop recording"
-            >
-              <div className="w-12 h-12 rounded-full bg-[#141928] border border-[#2a3654] flex items-center justify-center shadow-lg group-hover:border-rose-500/50 group-hover:bg-[#1a2033] transition-all duration-200">
-                <span className="w-3.5 h-3.5 rounded-[3px] bg-rose-500 group-hover:bg-rose-400 transition-colors" />
-              </div>
-              <span className="text-[11px] text-slate-500 group-hover:text-rose-400 transition-colors">Stop</span>
-            </button>
-          )}
         </div>
 
         <div className="text-center">
@@ -925,7 +1205,7 @@ export const AIInterviewEvaluation = () => {
           ) : (
             <div>
               <p className="text-slate-300 text-sm font-medium mb-1">Click the microphone to answer</p>
-              <p className="text-slate-500 text-xs">Speak freely — click Stop when you're done</p>
+              <p className="text-slate-500 text-xs">Speak freely — click the mic again to stop</p>
             </div>
           )}
         </div>
@@ -970,7 +1250,7 @@ export const AIInterviewEvaluation = () => {
                   <h1 className="text-white font-bold text-sm tracking-tight">AI Interview Evaluator</h1>
                   <div className="flex items-center gap-3">
                     <p className="text-slate-500 text-xs">
-                      {currentQuestion ? `Question ${questionCount}` : "Ready"}
+                      {report ? `Interview #${report.interview_id}` : currentQuestion ? `Question ${questionCount}` : "Ready"}
                     </p>
                     {isRecording && (
                       <span className="flex items-center gap-1 text-xs text-rose-400">
@@ -980,6 +1260,11 @@ export const AIInterviewEvaluation = () => {
                     {phase === "submitting" && (
                       <span className="flex items-center gap-1 text-xs text-amber-400">
                         <span className="animate-pulse">●</span> Submitting...
+                      </span>
+                    )}
+                    {endingInterview && (
+                      <span className="flex items-center gap-1 text-xs text-amber-400">
+                        <span className="animate-pulse">●</span> Finalizing...
                       </span>
                     )}
                     {sessionComplete && (
@@ -995,14 +1280,16 @@ export const AIInterviewEvaluation = () => {
                   </div>
                 </div>
               </div>
-              {sessionComplete && !showEvaluation && (
+              {currentQuestion && !sessionComplete && phase !== "recording" && (
                 <Button
-                  type="primary"
                   size="small"
-                  onClick={() => setShowEvaluation(true)}
-                  className="!bg-linear-to-r !from-violet-600 !to-indigo-600 !border-0 !rounded-lg !shadow-lg !shadow-violet-500/20"
+                  danger
+                  loading={endingInterview}
+                  onClick={handleEndEarly}
+                  icon={<PoweroffOutlined />}
+                  className="!rounded-lg"
                 >
-                  View evaluation
+                  End interview
                 </Button>
               )}
             </div>
@@ -1013,6 +1300,8 @@ export const AIInterviewEvaluation = () => {
             <div className="flex-1 overflow-y-auto px-4 py-4 relative">
               {!currentQuestion && !sessionComplete ? (
                 <SetupScreen onStart={initializeInterview} loading={phase === "starting"} />
+              ) : sessionComplete && report ? (
+                <ReportScreen report={report} onRestart={handleRestart} />
               ) : (
                 <div className="w-full md:w-[70%] mx-auto space-y-5">
                   {/* Countdown Overlay */}
@@ -1076,6 +1365,47 @@ export const AIInterviewEvaluation = () => {
                                       </Tag>
                                     </div>
                                     <p className="text-xs text-slate-400 mb-2">{msg.evaluation.summary}</p>
+                                    {msg.evaluation.transcriptionMessage && (
+                                      <p className="text-[11px] text-sky-400 mb-2">
+                                        {msg.evaluation.transcriptionMessage}
+                                      </p>
+                                    )}
+                                    {msg.evaluation.matchedKeywords.length > 0 && (
+                                      <div className="mb-1.5">
+                                        <span className="text-emerald-400 text-xs font-medium">Matched keywords</span>
+                                        <div className="flex flex-wrap gap-1 mt-1">
+                                          {msg.evaluation.matchedKeywords.map((k, i) => (
+                                            <Tag key={i} color="green" className="!text-[11px] !px-1.5 !py-0 !border-0">
+                                              {k}
+                                            </Tag>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    )}
+                                    {msg.evaluation.missingKeywords.length > 0 && (
+                                      <div className="mb-1.5">
+                                        <span className="text-rose-400 text-xs font-medium">Missing keywords</span>
+                                        <div className="flex flex-wrap gap-1 mt-1">
+                                          {msg.evaluation.missingKeywords.map((k, i) => (
+                                            <Tag key={i} color="red" className="!text-[11px] !px-1.5 !py-0 !border-0">
+                                              {k}
+                                            </Tag>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    )}
+                                    {msg.evaluation.negatedKeywords.length > 0 && (
+                                      <div className="mb-1.5">
+                                        <span className="text-amber-400 text-xs font-medium">Negated keywords</span>
+                                        <div className="flex flex-wrap gap-1 mt-1">
+                                          {msg.evaluation.negatedKeywords.map((k, i) => (
+                                            <Tag key={i} color="orange" className="!text-[11px] !px-1.5 !py-0 !border-0">
+                                              {k}
+                                            </Tag>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    )}
                                     {msg.evaluation.strengths.length > 0 && (
                                       <div className="mb-1.5">
                                         <span className="text-emerald-400 text-xs font-medium">Strengths</span>

@@ -105,10 +105,6 @@ export default function SubjectsCard() {
     subject.tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
-  const handleSubjectClick = (subjectId: number) => {
-    navigate(`/subject/${subjectId}`);
-  };
-
   const handleContinueLearning = (e: React.MouseEvent, subjectId: number) => {
     e.stopPropagation();
     navigate(`/subject/${subjectId}`);

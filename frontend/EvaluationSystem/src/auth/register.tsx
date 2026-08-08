@@ -2,6 +2,11 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import api from '../utils/axiosInstance';
 
+function getErrorMessage(err: unknown, fallback: string): string {
+  const data = (err as { response?: { data?: { message?: string } } } | null)?.response?.data;
+  return data?.message || fallback;
+}
+
 type Role = 'admin' | 'user';
 
 interface RegisterFormData {
@@ -85,7 +90,7 @@ const Register: React.FC = () => {
 
     setLoading(true);
     try {
-      const response = await api.post('/api/auth/register', {
+      await api.post('/api/auth/register', {
         name: formData.name,
         email: formData.email,
         password: formData.password,
@@ -95,8 +100,8 @@ const Register: React.FC = () => {
 
    
       navigate('/login', { state: { message: 'Registration successful! Please sign in.' } });
-    } catch (err: any) {
-      setError(err?.response?.data?.message || 'Registration failed');
+    } catch (err) {
+      setError(getErrorMessage(err, 'Registration failed'));
     } finally {
       setLoading(false);
     }
@@ -120,9 +125,9 @@ const Register: React.FC = () => {
         {/* Logo */}
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-xl bg-violet-600 flex items-center justify-center shadow-lg shadow-violet-900/50">
-            <span className="text-white text-xs font-black tracking-tight">IQ</span>
+            <span className="text-white text-xs font-black tracking-tight">PW</span>
           </div>
-          <span className="text-white text-base font-semibold tracking-tight">InterviewIQ</span>
+          <span className="text-white text-base font-semibold tracking-tight">PrepWise</span>
         </div>
 
         {/* Hero copy */}
@@ -160,7 +165,7 @@ const Register: React.FC = () => {
 
         {/* Footer note */}
         <p className="text-slate-600 text-[11px]">
-          © {new Date().getFullYear()} InterviewIQ. All rights reserved.
+          © {new Date().getFullYear()} PrepWise. All rights reserved.
         </p>
       </div>
 
@@ -171,9 +176,9 @@ const Register: React.FC = () => {
           {/* Mobile logo */}
           <div className="flex items-center gap-2.5 mb-8 lg:hidden">
             <div className="w-8 h-8 rounded-xl bg-violet-600 flex items-center justify-center">
-              <span className="text-white text-xs font-black">IQ</span>
+              <span className="text-white text-xs font-black">PW</span>
             </div>
-            <span className="text-white text-sm font-semibold">InterviewIQ</span>
+            <span className="text-white text-sm font-semibold">PrepWise</span>
           </div>
 
           {/* Form header */}

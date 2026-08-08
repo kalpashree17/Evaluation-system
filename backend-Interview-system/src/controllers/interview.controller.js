@@ -1,3 +1,4 @@
+
 import {
   startInterview,
   getInterview,
@@ -7,20 +8,20 @@ import {
 import { ApiError } from "../utils/ApiError.js";
 
 export const createInterview = async (ctx) => {
-  const { skill_id, starting_level } = ctx.request.body;
+  const { skill_ids, starting_level } = ctx.request.body;
 
-  if (!skill_id || !starting_level) {
-    throw new ApiError(400, "skill_id and starting_level are required");
+  if (!Array.isArray(skill_ids) || skill_ids.length === 0 || !starting_level) {
+    throw new ApiError(400, "skill_ids (non-empty array) and starting_level are required");
   }
 
-  const skillId = Number(skill_id);
-  if (!Number.isInteger(skillId)) {
-    throw new ApiError(400, "skill_id must be a valid id");
+  const skillIds = skill_ids.map(Number);
+  if (skillIds.some((id) => !Number.isInteger(id))) {
+    throw new ApiError(400, "skill_ids must all be valid ids");
   }
 
   const result = await startInterview({
     userId: ctx.state.user.id,
-    skillId,
+    skillIds,
     startingLevel: starting_level,
   });
 

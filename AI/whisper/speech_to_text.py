@@ -1,9 +1,10 @@
 from fastapi import FastAPI, UploadFile, File
 from faster_whisper import WhisperModel
+from confidence import analyze_audio_confidence
 import shutil
 import tempfile
 import os
-import math
+import time
 
 app = FastAPI()
 
@@ -19,35 +20,70 @@ def health_check():
 
 @app.post("/transcribe")
 async def transcribe(audio: UploadFile = File(...)):
-    # Save incoming audio bytes to a temp file (Whisper needs a file path).
-    # Keep the original extension (.webm, .wav, etc.) — faster-whisper uses
-    # ffmpeg under the hood, which can decode webm/opus fine.
+
+    print("Received file:", audio.filename)
+
     suffix = os.path.splitext(audio.filename or "")[1] or ".webm"
+
     with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
         shutil.copyfileobj(audio.file, tmp)
         tmp_path = tmp.name
 
+    print("Saved temp file:", tmp_path)
+    print("File size:", os.path.getsize(tmp_path), "bytes")
+
+    # ── TEMP DIAGNOSTIC: keep a copy of every upload for offline inspection ──
     try:
-        segments, info = model.transcribe(tmp_path)
-        segments = list(segments)  # segments is a generator; consume it once
+        capture_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "captured")
+        os.makedirs(capture_dir, exist_ok=True)
+        captured_name = os.path.join(
+            capture_dir, f"{int(time.time())}_{os.path.basename(tmp_path)}"
+        )
+        shutil.copy(tmp_path, captured_name)
+        print("Captured upload:", captured_name)
+    except Exception as e:
+        print("Capture failed:", e)
+    # ── END TEMP DIAGNOSTIC ──
+
+    try:
+        # segments, info = model.transcribe(tmp_path)
+        segments, info = model.transcribe(
+            tmp_path,
+            language="en",
+            beam_size=5,
+            word_timestamps=True,
+        )
+
+        segments = list(segments)
+
+        print("Detected language:", info.language)
+        print("Number of segments:", len(segments))
+
+        for s in segments:
+            print("SEGMENT:", s.text)
 
         text = " ".join(segment.text for segment in segments).strip()
 
-        # faster-whisper doesn't give one overall confidence score.
-        # Each segment has avg_logprob (a log-probability, usually a small
-        # negative number like -0.3). We convert that into a 0-1-ish score
-        # by exponentiating, then average across segments.
-        if segments:
-            avg_logprob = sum(s.avg_logprob for s in segments) / len(segments)
-            confidence_score = round(math.exp(avg_logprob), 4)  # e.g. -0.2 -> 0.82
-            confidence_score = max(0.0, min(1.0, confidence_score))  # clamp to 0-1
-        else:
-            confidence_score = None
+        # Build word timestamps for speech-rate calculation
+        word_timestamps = []
+        for seg in segments:
+            if seg.words:
+                for w in seg.words:
+                    word_timestamps.append({"start": w.start, "end": w.end})
+
+        # Run audio confidence analysis (signal processing)
+        audio_result = analyze_audio_confidence(
+            tmp_path, word_timestamps=word_timestamps, text=text
+        )
+
+        # Use the shared 65/35 acoustic/communication fusion from the
+        # confidence pipeline; do not apply a second, conflicting fusion here.
+        confidence_score = audio_result["confidence_score"]
 
     finally:
         os.remove(tmp_path)
 
     return {
         "transcript_text": text,
-        "confidence_score": confidence_score
+        "confidence_score": confidence_score,
     }

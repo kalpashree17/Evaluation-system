@@ -29,7 +29,8 @@ const load = () => {
 const safeParseKeywords = (raw) => {
   try {
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed.map((k) => k.term).filter(Boolean) : [];
+
+    return Array.isArray(parsed) ? parsed : [];
   } catch {
     return [];
   }

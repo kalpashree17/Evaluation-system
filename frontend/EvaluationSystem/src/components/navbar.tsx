@@ -54,7 +54,6 @@ const adminNavItems: NavItem[] = [
 
 // User navigation items
 const userNavItems: NavItem[] = [
-  { id: "overview", label: "Overview", icon: "dashboard", component: Overview, roles: ['user'] },
   { id: "subjects", label: "My Subjects", icon: "subject", component: SubjectsCard, roles: ['user'] },
   { id: "practice", label: "Practice", icon: "subject", component: AIInterviewEvaluation, roles: ['user'] },
   // { id: "my-results", label: "My Results", icon: "analytics", component: MyResults, roles: ['user'] },
@@ -82,7 +81,7 @@ const getDefaultModule = (role?: Role | string | null): string => {
     case 'admin':
       return 'overview';
     case 'user':
-      return 'overview';
+      return 'practice';
     default:
       return 'overview';
   }
@@ -141,7 +140,7 @@ export const Navbar = ({ module, setModule, sidebarOpen, role }: NavbarProps) =>
         </div>
         {sidebarOpen && (
           <span className="text-white font-bold text-lg tracking-tight">
-            InterviewIQ
+            PrepWise
           </span>
         )}
       </div>
