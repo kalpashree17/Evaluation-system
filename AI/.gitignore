@@ -3,3 +3,9 @@ whisper-env/
 
 # Python cache
 whisper/__pycache__/
+
+
+__pycache__/
+
+AI/whisper/__pycache__
+
